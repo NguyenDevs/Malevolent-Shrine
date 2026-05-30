@@ -1,7 +1,5 @@
 package dev.nguyendevs.malevolentshrine.domain;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.data.BlockData;
@@ -44,7 +42,7 @@ public class ShrineSession {
         this.affectedEntities = new HashSet<>();
         this.dismantleTaskIds = new ArrayList<>();
         this.bossBar = Bukkit.createBossBar(
-                String.valueOf(Component.text("Malevolent Shrine", NamedTextColor.DARK_RED)),
+                "Malevolent Shrine",
                 BarColor.RED,
                 BarStyle.SEGMENTED_20
         );

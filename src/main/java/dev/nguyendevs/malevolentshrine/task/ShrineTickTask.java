@@ -10,6 +10,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.SoundCategory;
+import org.bukkit.World;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -25,6 +27,8 @@ public class ShrineTickTask extends BukkitRunnable {
     private final ShrineSession session;
     private int energyTickCounter;
     private int ambientTickCounter;
+    private int ambientLoopSoundCooldown;
+    private int ambientMoodSoundCooldown;
 
     public ShrineTickTask(ShrineManager manager, ShrineConfig config, CleaveSweepHandler cleaveHandler,
                           EntityAuraHandler auraHandler, ShrineSession session) {
@@ -35,6 +39,8 @@ public class ShrineTickTask extends BukkitRunnable {
         this.session = session;
         this.energyTickCounter = 0;
         this.ambientTickCounter = 0;
+        this.ambientLoopSoundCooldown = 0;
+        this.ambientMoodSoundCooldown = 40;
     }
 
     @Override
@@ -90,6 +96,22 @@ public class ShrineTickTask extends BukkitRunnable {
         if (ambientTickCounter >= config.getAmbientParticleInterval()) {
             ambientTickCounter = 0;
             auraHandler.tickAmbient(session, config);
+        }
+
+        Location center = session.getCenter();
+        World world = center.getWorld();
+        if (world != null) {
+            ambientLoopSoundCooldown--;
+            if (ambientLoopSoundCooldown <= 0) {
+                ambientLoopSoundCooldown = 160;
+                world.playSound(center, "minecraft:ambient.crimson_forest.loop", SoundCategory.AMBIENT, 1.0f, 0.1f);
+            }
+
+            ambientMoodSoundCooldown--;
+            if (ambientMoodSoundCooldown <= 0) {
+                ambientMoodSoundCooldown = 80;
+                world.playSound(center, "minecraft:ambient.crimson_forest.mood", SoundCategory.AMBIENT, 1.0f, 0.5f);
+            }
         }
 
         cleaveHandler.tick(session, config);

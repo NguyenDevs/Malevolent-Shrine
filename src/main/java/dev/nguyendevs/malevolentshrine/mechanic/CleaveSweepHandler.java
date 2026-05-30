@@ -78,8 +78,7 @@ public class CleaveSweepHandler {
                     LivingEntity target = targets.get(i);
                     if (target.isDead()) continue;
 
-                    double currentHealth = target.getHealth();
-                    double finalDmg = Math.min(dmg, currentHealth - 0.01);
+                    double finalDmg = Math.min(dmg, target.getHealth());
                     if (finalDmg <= 0) continue;
 
                     target.damage(finalDmg);

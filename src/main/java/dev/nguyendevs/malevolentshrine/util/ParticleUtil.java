@@ -22,9 +22,9 @@ public final class ParticleUtil {
     public static void spawnCleaveHit(Location location) {
         World world = location.getWorld();
         if (world == null) return;
-        world.spawnParticle(Particle.SWEEP_ATTACK, location, 3, 0.5, 0.5, 0.5, 0);
         world.spawnParticle(Particle.CRIT, location, 8, 0.6, 0.6, 0.6, 0.1);
         world.spawnParticle(Particle.DAMAGE_INDICATOR, location, 5, 0.3, 0.5, 0.3, 0);
+        world.spawnParticle(Particle.SWEEP_ATTACK, location, 1, 0.5, 0.5, 0.5, 0);
     }
 
     public static void spawnDismantleParticle(Location location, Material blockType) {

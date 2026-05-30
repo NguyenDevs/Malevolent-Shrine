@@ -44,6 +44,132 @@ public class FastAsyncHandler {
 
     public static void restoreBlocks(World world, Map<Long, BlockData> blocks) {
         if (blocks.isEmpty()) return;
+        if (FAWE_AVAILABLE) {
+            try {
+                restoreBlocksFAWE(world, blocks);
+                return;
+            } catch (Throwable ignored) {
+            }
+        }
+        restoreBlocksChunkBatched(world, blocks);
+    }
+
+    public static int setBlocksBatched(JavaPlugin plugin, World world, List<long[]> blockCoords, Material material, int blocksPerTick, boolean debug) {
+        if (blockCoords.isEmpty()) return -1;
+        if (FAWE_AVAILABLE) {
+            try {
+                setBlocksFAWE(world, blockCoords, material);
+                return -1;
+            } catch (Throwable ignored) {}
+        }
+
+        BlockData data = material.createBlockData();
+        int[] idx = {0};
+        long startTime = System.nanoTime();
+
+        BukkitRunnable task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                int chunkX = Integer.MIN_VALUE;
+                int chunkZ = Integer.MIN_VALUE;
+                Chunk chunk = null;
+
+                for (int i = 0; i < blocksPerTick && idx[0] < blockCoords.size(); i++) {
+                    long[] coord = blockCoords.get(idx[0]++);
+                    int x = BlockPosUtil.unpackX(coord[0]);
+                    int y = BlockPosUtil.unpackY(coord[0]);
+                    int z = BlockPosUtil.unpackZ(coord[0]);
+                    int cx = x >> 4;
+                    int cz = z >> 4;
+
+                    if (cx != chunkX || cz != chunkZ) {
+                        chunkX = cx;
+                        chunkZ = cz;
+                        chunk = world.getChunkAt(cx, cz);
+                    }
+                    chunk.getBlock(x & 15, y, z & 15).setBlockData(data, false);
+                }
+
+                if (idx[0] >= blockCoords.size()) {
+                    if (debug) {
+                        long elapsed = System.nanoTime() - startTime;
+                        double totalMs = elapsed / 1_000_000.0;
+                        int totalBlocks = blockCoords.size();
+                        long ticksElapsed = Math.max(1, elapsed / 50_000_000L);
+                        plugin.getLogger().info(String.format(
+                                "[ShrineDebug] SetBlocks: %d blocks set in %d ticks (%.2f ms), ~%d blocks/tick, config bpt=%d",
+                                totalBlocks, ticksElapsed, totalMs, totalBlocks / ticksElapsed, blocksPerTick
+                        ));
+                    }
+                    cancel();
+                }
+            }
+        };
+
+        return task.runTaskTimer(plugin, 0, 1).getTaskId();
+    }
+
+    public static int setBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick, boolean debug) {
+        return restoreBlocksBatched(plugin, world, blocks, blocksPerTick, debug);
+    }
+
+    public static int restoreBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick, boolean debug) {
+        if (blocks.isEmpty()) return -1;
+        if (FAWE_AVAILABLE) {
+            try {
+                restoreBlocksFAWE(world, blocks);
+                return -1;
+            } catch (Throwable ignored) {}
+        }
+
+        List<Map.Entry<Long, BlockData>> entries = new ArrayList<>(blocks.entrySet());
+        int[] idx = {0};
+        long startTime = System.nanoTime();
+
+        BukkitRunnable task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                int chunkX = Integer.MIN_VALUE;
+                int chunkZ = Integer.MIN_VALUE;
+                Chunk chunk = null;
+
+                for (int i = 0; i < blocksPerTick && idx[0] < entries.size(); i++) {
+                    Map.Entry<Long, BlockData> entry = entries.get(idx[0]++);
+                    long packed = entry.getKey();
+                    int x = BlockPosUtil.unpackX(packed);
+                    int y = BlockPosUtil.unpackY(packed);
+                    int z = BlockPosUtil.unpackZ(packed);
+                    int cx = x >> 4;
+                    int cz = z >> 4;
+
+                    if (cx != chunkX || cz != chunkZ) {
+                        chunkX = cx;
+                        chunkZ = cz;
+                        chunk = world.getChunkAt(cx, cz);
+                    }
+                    chunk.getBlock(x & 15, y, z & 15).setBlockData(entry.getValue(), false);
+                }
+
+                if (idx[0] >= entries.size()) {
+                    if (debug) {
+                        long elapsed = System.nanoTime() - startTime;
+                        double totalMs = elapsed / 1_000_000.0;
+                        int totalBlocks = entries.size();
+                        long ticksElapsed = Math.max(1, elapsed / 50_000_000L);
+                        plugin.getLogger().info(String.format(
+                                "[ShrineDebug] RestoreBlocks: %d blocks restored in %d ticks (%.2f ms), ~%d blocks/tick",
+                                totalBlocks, ticksElapsed, totalMs, totalBlocks / ticksElapsed
+                        ));
+                    }
+                    cancel();
+                }
+            }
+        };
+
+        return task.runTaskTimer(plugin, 0, 1).getTaskId();
+    }
+
+    private static void restoreBlocksChunkBatched(World world, Map<Long, BlockData> blocks) {
         Map<Long, List<long[]>> chunkBatches = new HashMap<>();
         for (Map.Entry<Long, BlockData> entry : blocks.entrySet()) {
             long packed = entry.getKey();
@@ -70,95 +196,6 @@ public class FastAsyncHandler {
                 }
             }
         }
-    }
-
-    public static int setBlocksBatched(JavaPlugin plugin, World world, List<long[]> blockCoords, Material material, int blocksPerTick) {
-        if (blockCoords.isEmpty()) return -1;
-        if (FAWE_AVAILABLE) {
-            try {
-                setBlocksFAWE(world, blockCoords, material);
-                return -1;
-            } catch (Throwable ignored) {}
-        }
-
-        BlockData data = material.createBlockData();
-        int[] idx = {0};
-
-        BukkitRunnable task = new BukkitRunnable() {
-            @Override
-            public void run() {
-                int chunkX = Integer.MIN_VALUE;
-                int chunkZ = Integer.MIN_VALUE;
-                Chunk chunk = null;
-
-                for (int i = 0; i < blocksPerTick && idx[0] < blockCoords.size(); i++) {
-                    long[] coord = blockCoords.get(idx[0]++);
-                    int x = BlockPosUtil.unpackX(coord[0]);
-                    int y = BlockPosUtil.unpackY(coord[0]);
-                    int z = BlockPosUtil.unpackZ(coord[0]);
-                    int cx = x >> 4;
-                    int cz = z >> 4;
-
-                    if (cx != chunkX || cz != chunkZ) {
-                        chunkX = cx;
-                        chunkZ = cz;
-                        chunk = world.getChunkAt(cx, cz);
-                    }
-                    chunk.getBlock(x & 15, y, z & 15).setBlockData(data, false);
-                }
-
-                if (idx[0] >= blockCoords.size()) cancel();
-            }
-        };
-
-        return task.runTaskTimer(plugin, 0, 1).getTaskId();
-    }
-
-    public static int setBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick) {
-        return restoreBlocksBatched(plugin, world, blocks, blocksPerTick);
-    }
-
-    public static int restoreBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick) {
-        if (blocks.isEmpty()) return -1;
-        if (FAWE_AVAILABLE) {
-            try {
-                restoreBlocks(world, blocks);
-                return -1;
-            } catch (Throwable ignored) {}
-        }
-
-        List<Map.Entry<Long, BlockData>> entries = new ArrayList<>(blocks.entrySet());
-        int[] idx = {0};
-
-        BukkitRunnable task = new BukkitRunnable() {
-            @Override
-            public void run() {
-                int chunkX = Integer.MIN_VALUE;
-                int chunkZ = Integer.MIN_VALUE;
-                Chunk chunk = null;
-
-                for (int i = 0; i < blocksPerTick && idx[0] < entries.size(); i++) {
-                    Map.Entry<Long, BlockData> entry = entries.get(idx[0]++);
-                    long packed = entry.getKey();
-                    int x = BlockPosUtil.unpackX(packed);
-                    int y = BlockPosUtil.unpackY(packed);
-                    int z = BlockPosUtil.unpackZ(packed);
-                    int cx = x >> 4;
-                    int cz = z >> 4;
-
-                    if (cx != chunkX || cz != chunkZ) {
-                        chunkX = cx;
-                        chunkZ = cz;
-                        chunk = world.getChunkAt(cx, cz);
-                    }
-                    chunk.getBlock(x & 15, y, z & 15).setBlockData(entry.getValue(), false);
-                }
-
-                if (idx[0] >= entries.size()) cancel();
-            }
-        };
-
-        return task.runTaskTimer(plugin, 0, 1).getTaskId();
     }
 
     private static void setBlocksFAWE(World world, Collection<long[]> blockCoords, Material material) throws Exception {
@@ -194,6 +231,40 @@ public class FastAsyncHandler {
         }
     }
 
+    private static void restoreBlocksFAWE(World world, Map<Long, BlockData> blocks) throws Exception {
+        Object weWorld = Class.forName("com.sk89q.worldedit.bukkit.BukkitAdapter")
+                .getMethod("adapt", World.class)
+                .invoke(null, world);
+
+        Object worldEdit = Class.forName("com.sk89q.worldedit.WorldEdit")
+                .getMethod("getInstance").invoke(null);
+        Object editSession = worldEdit.getClass()
+                .getMethod("newEditSession", Class.forName("com.sk89q.worldedit.world.World"))
+                .invoke(worldEdit, weWorld);
+
+        try {
+            Class<?> bv3Class = Class.forName("com.sk89q.worldedit.math.BlockVector3");
+            Class<?> baseBlockClass = Class.forName("com.sk89q.worldedit.world.block.BaseBlock");
+            java.lang.reflect.Method setBlock = editSession.getClass().getMethod("setBlock", bv3Class, baseBlockClass);
+            java.lang.reflect.Method at = bv3Class.getMethod("at", int.class, int.class, int.class);
+
+            Class<?> bukkitAdapter = Class.forName("com.sk89q.worldedit.bukkit.BukkitAdapter");
+            java.lang.reflect.Method adaptBlockData = bukkitAdapter.getMethod("adapt", BlockData.class);
+
+            for (Map.Entry<Long, BlockData> entry : blocks.entrySet()) {
+                long packed = entry.getKey();
+                int x = BlockPosUtil.unpackX(packed);
+                int y = BlockPosUtil.unpackY(packed);
+                int z = BlockPosUtil.unpackZ(packed);
+                Object pos = at.invoke(null, x, y, z);
+                Object weBlock = adaptBlockData.invoke(null, entry.getValue());
+                setBlock.invoke(editSession, pos, weBlock);
+            }
+        } finally {
+            editSession.getClass().getMethod("close").invoke(editSession);
+        }
+    }
+
     private static void setBlocksChunkBatched(World world, Collection<long[]> blockCoords, Material material) {
         Map<Long, List<int[]>> chunkBatches = new HashMap<>();
         for (long[] coord : blockCoords) {
@@ -212,7 +283,7 @@ public class FastAsyncHandler {
             if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
             Chunk chunk = world.getChunkAt(chunkX, chunkZ);
             for (int[] pos : entry.getValue()) {
-                chunk.getBlock(pos[0] & 15, pos[1], pos[2] & 15).setType(material, false);
+                chunk.getBlock(pos[0] & 15, pos[1], pos[2] & 15).setBlockData(data, false);
             }
         }
     }

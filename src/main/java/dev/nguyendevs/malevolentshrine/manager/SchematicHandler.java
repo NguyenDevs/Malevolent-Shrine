@@ -2,6 +2,7 @@ package dev.nguyendevs.malevolentshrine.manager;
 
 import dev.nguyendevs.malevolentshrine.util.BlockPosUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -73,10 +74,31 @@ public class SchematicHandler {
                 int endY = y + maxClipY;
                 int endZ = z + maxClipZ;
 
-                for (int bx = startX; bx <= endX; bx++) {
-                    for (int by = startY; by <= endY; by++) {
-                        for (int bz = startZ; bz <= endZ; bz++) {
-                            result.put(BlockPosUtil.pack(bx, by, bz), world.getBlockAt(bx, by, bz).getBlockData().clone());
+                int minChunkX = startX >> 4;
+                int maxChunkX = endX >> 4;
+                int minChunkZ = startZ >> 4;
+                int maxChunkZ = endZ >> 4;
+
+                for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+                    for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                        Chunk chunk = world.getChunkAt(chunkX, chunkZ);
+                        int baseX = chunkX << 4;
+                        int baseZ = chunkZ << 4;
+
+                        int localStartX = Math.max(startX - baseX, 0);
+                        int localEndX = Math.min(endX - baseX, 15);
+                        int localStartZ = Math.max(startZ - baseZ, 0);
+                        int localEndZ = Math.min(endZ - baseZ, 15);
+
+                        for (int lx = localStartX; lx <= localEndX; lx++) {
+                            int wx = baseX | lx;
+                            for (int by = startY; by <= endY; by++) {
+                                for (int lz = localStartZ; lz <= localEndZ; lz++) {
+                                    int wz = baseZ | lz;
+                                    result.put(BlockPosUtil.pack(wx, by, wz),
+                                            chunk.getBlock(lx, by, lz).getBlockData().clone());
+                                }
+                            }
                         }
                     }
                 }

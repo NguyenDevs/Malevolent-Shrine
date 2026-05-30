@@ -127,7 +127,7 @@ public class TerrainDeformHandler {
             }
         }
 
-        int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, replacements, config.getDebugBlocksPerTick());
+        int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, replacements, config.getDebugBlocksPerTick(), config.isDebugEnabled());
         if (taskId != -1) {
             session.addDismantleTaskId(taskId);
         }
@@ -242,7 +242,7 @@ public class TerrainDeformHandler {
             final Material particleMat = dismantleParticleMat;
             int delay = layer * 2;
 
-            int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, layerBlocks, Material.AIR, blocksPerTick);
+            int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, layerBlocks, Material.AIR, blocksPerTick, config.isDebugEnabled());
             if (taskId != -1) {
                 session.addDismantleTaskId(taskId);
             }
@@ -271,18 +271,18 @@ public class TerrainDeformHandler {
 
         long startTime = System.nanoTime();
 
-        int surfaceTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalSurfaceBlocks(), config.getDebugBlocksPerTick());
+        int surfaceTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalSurfaceBlocks(), config.getDebugBlocksPerTick(), config.isDebugEnabled());
         if (surfaceTaskId != -1) {
             session.addDismantleTaskId(surfaceTaskId);
         }
 
-        int dismantleTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalDismantleBlocks(), config.getDebugBlocksPerTick());
+        int dismantleTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalDismantleBlocks(), config.getDebugBlocksPerTick(), config.isDebugEnabled());
         if (dismantleTaskId != -1) {
             session.addDismantleTaskId(dismantleTaskId);
         }
 
         if (!session.getSchematicOriginalBlocks().isEmpty()) {
-            int schemTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getSchematicOriginalBlocks(), config.getDebugBlocksPerTick());
+            int schemTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getSchematicOriginalBlocks(), config.getDebugBlocksPerTick(), config.isDebugEnabled());
             if (schemTaskId != -1) {
                 session.addDismantleTaskId(schemTaskId);
             }
