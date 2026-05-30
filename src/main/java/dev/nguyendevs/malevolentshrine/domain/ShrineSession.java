@@ -19,6 +19,7 @@ public class ShrineSession {
     private final Set<Entity> affectedEntities;
     private int cleaveTickCounter;
     private int cleaveNextInterval;
+    private final List<Integer> dismantleTaskIds;
 
     public ShrineSession(UUID playerId, Location center, double radius, int durationTicks) {
         this.playerId = playerId;
@@ -31,6 +32,7 @@ public class ShrineSession {
         this.originalSurfaceBlocks = new HashMap<>();
         this.originalDismantleBlocks = new HashMap<>();
         this.affectedEntities = new HashSet<>();
+        this.dismantleTaskIds = new ArrayList<>();
     }
 
     public UUID getPlayerId() { return playerId; }
@@ -50,4 +52,7 @@ public class ShrineSession {
     public void setCleaveTickCounter(int cleaveTickCounter) { this.cleaveTickCounter = cleaveTickCounter; }
     public int getCleaveNextInterval() { return cleaveNextInterval; }
     public void setCleaveNextInterval(int cleaveNextInterval) { this.cleaveNextInterval = cleaveNextInterval; }
+
+    public List<Integer> getDismantleTaskIds() { return dismantleTaskIds; }
+    public void addDismantleTaskId(int taskId) { dismantleTaskIds.add(taskId); }
 }

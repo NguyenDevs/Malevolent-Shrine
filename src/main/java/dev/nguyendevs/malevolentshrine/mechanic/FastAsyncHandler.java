@@ -1,11 +1,13 @@
 package dev.nguyendevs.malevolentshrine.mechanic;
 
+import dev.nguyendevs.malevolentshrine.util.BlockPosUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.util.BlockVector;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
 
@@ -45,9 +47,9 @@ public class FastAsyncHandler {
         Map<Long, List<long[]>> chunkBatches = new HashMap<>();
         for (Map.Entry<Long, BlockData> entry : blocks.entrySet()) {
             long packed = entry.getKey();
-            int x = (int) (packed >> 38);
-            int z = (int) ((packed >> 12) & 0x3FFFFFFF);
-            int y = (int) ((packed & 0xFFF) - 2048);
+            int x = BlockPosUtil.unpackX(packed);
+            int y = BlockPosUtil.unpackY(packed);
+            int z = BlockPosUtil.unpackZ(packed);
             long chunkKey = (long) (x >> 4) << 32 | (z >> 4) & 0xFFFFFFFFL;
             chunkBatches.computeIfAbsent(chunkKey, k -> new ArrayList<>()).add(new long[]{packed, 0});
         }
@@ -59,15 +61,100 @@ public class FastAsyncHandler {
             Chunk chunk = world.getChunkAt(chunkX, chunkZ);
             for (long[] data : chunkEntry.getValue()) {
                 long packed = data[0];
-                int x = (int) (packed >> 38);
-                int y = (int) ((packed & 0xFFF) - 2048);
-                int z = (int) ((packed >> 12) & 0x3FFFFFFF);
+                int x = BlockPosUtil.unpackX(packed);
+                int y = BlockPosUtil.unpackY(packed);
+                int z = BlockPosUtil.unpackZ(packed);
                 BlockData blockData = blocks.get(packed);
                 if (blockData != null) {
                     chunk.getBlock(x & 15, y, z & 15).setBlockData(blockData, false);
                 }
             }
         }
+    }
+
+    public static int setBlocksBatched(JavaPlugin plugin, World world, List<long[]> blockCoords, Material material, int blocksPerTick) {
+        if (blockCoords.isEmpty()) return -1;
+        if (FAWE_AVAILABLE) {
+            try {
+                setBlocksFAWE(world, blockCoords, material);
+                return -1;
+            } catch (Throwable ignored) {}
+        }
+
+        BlockData data = material.createBlockData();
+        int[] idx = {0};
+
+        BukkitRunnable task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                int chunkX = Integer.MIN_VALUE;
+                int chunkZ = Integer.MIN_VALUE;
+                Chunk chunk = null;
+
+                for (int i = 0; i < blocksPerTick && idx[0] < blockCoords.size(); i++) {
+                    long[] coord = blockCoords.get(idx[0]++);
+                    int x = BlockPosUtil.unpackX(coord[0]);
+                    int y = BlockPosUtil.unpackY(coord[0]);
+                    int z = BlockPosUtil.unpackZ(coord[0]);
+                    int cx = x >> 4;
+                    int cz = z >> 4;
+
+                    if (cx != chunkX || cz != chunkZ) {
+                        chunkX = cx;
+                        chunkZ = cz;
+                        chunk = world.getChunkAt(cx, cz);
+                    }
+                    chunk.getBlock(x & 15, y, z & 15).setBlockData(data, false);
+                }
+
+                if (idx[0] >= blockCoords.size()) cancel();
+            }
+        };
+
+        return task.runTaskTimer(plugin, 0, 1).getTaskId();
+    }
+
+    public static int restoreBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick) {
+        if (blocks.isEmpty()) return -1;
+        if (FAWE_AVAILABLE) {
+            try {
+                restoreBlocks(world, blocks);
+                return -1;
+            } catch (Throwable ignored) {}
+        }
+
+        List<Map.Entry<Long, BlockData>> entries = new ArrayList<>(blocks.entrySet());
+        int[] idx = {0};
+
+        BukkitRunnable task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                int chunkX = Integer.MIN_VALUE;
+                int chunkZ = Integer.MIN_VALUE;
+                Chunk chunk = null;
+
+                for (int i = 0; i < blocksPerTick && idx[0] < entries.size(); i++) {
+                    Map.Entry<Long, BlockData> entry = entries.get(idx[0]++);
+                    long packed = entry.getKey();
+                    int x = BlockPosUtil.unpackX(packed);
+                    int y = BlockPosUtil.unpackY(packed);
+                    int z = BlockPosUtil.unpackZ(packed);
+                    int cx = x >> 4;
+                    int cz = z >> 4;
+
+                    if (cx != chunkX || cz != chunkZ) {
+                        chunkX = cx;
+                        chunkZ = cz;
+                        chunk = world.getChunkAt(cx, cz);
+                    }
+                    chunk.getBlock(x & 15, y, z & 15).setBlockData(entry.getValue(), false);
+                }
+
+                if (idx[0] >= entries.size()) cancel();
+            }
+        };
+
+        return task.runTaskTimer(plugin, 0, 1).getTaskId();
     }
 
     private static void setBlocksFAWE(World world, Collection<long[]> blockCoords, Material material) throws Exception {
@@ -92,9 +179,9 @@ public class FastAsyncHandler {
             java.lang.reflect.Method at = bv3Class.getMethod("at", int.class, int.class, int.class);
 
             for (long[] coord : blockCoords) {
-                int x = (int) (coord[0] >> 38);
-                int z = (int) ((coord[0] >> 12) & 0x3FFFFFFF);
-                int y = (int) ((coord[0] & 0xFFF) - 2048);
+                int x = BlockPosUtil.unpackX(coord[0]);
+                int y = BlockPosUtil.unpackY(coord[0]);
+                int z = BlockPosUtil.unpackZ(coord[0]);
                 Object pos = at.invoke(null, x, y, z);
                 setBlock.invoke(editSession, pos, airState);
             }
@@ -106,9 +193,9 @@ public class FastAsyncHandler {
     private static void setBlocksChunkBatched(World world, Collection<long[]> blockCoords, Material material) {
         Map<Long, List<int[]>> chunkBatches = new HashMap<>();
         for (long[] coord : blockCoords) {
-            int x = (int) (coord[0] >> 38);
-            int z = (int) ((coord[0] >> 12) & 0x3FFFFFFF);
-            int y = (int) ((coord[0] & 0xFFF) - 2048);
+            int x = BlockPosUtil.unpackX(coord[0]);
+            int y = BlockPosUtil.unpackY(coord[0]);
+            int z = BlockPosUtil.unpackZ(coord[0]);
             long chunkKey = (long) (x >> 4) << 32 | (z >> 4) & 0xFFFFFFFFL;
             chunkBatches.computeIfAbsent(chunkKey, k -> new ArrayList<>()).add(new int[]{x, y, z});
         }

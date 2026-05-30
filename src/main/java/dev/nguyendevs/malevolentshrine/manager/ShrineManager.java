@@ -110,6 +110,11 @@ public class ShrineManager {
 
         plugin.getServer().getScheduler().cancelTask(session.getTaskId());
 
+        for (int taskId : session.getDismantleTaskIds()) {
+            Bukkit.getScheduler().cancelTask(taskId);
+        }
+        session.getDismantleTaskIds().clear();
+
         Location center = session.getCenter();
         double radius = session.getRadius();
 
@@ -122,7 +127,7 @@ public class ShrineManager {
             center.getWorld().playSound(center, Sound.ENTITY_ENDERMAN_TELEPORT, SoundCategory.AMBIENT, 1.0f, 0.5f);
         }
 
-        terrainHandler.restore(session);
+        terrainHandler.restore(session, config);
         auraHandler.removeEffects(session);
 
         Player player = plugin.getServer().getPlayer(playerId);

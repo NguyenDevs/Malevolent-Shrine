@@ -43,4 +43,8 @@ sounds:
   cleave: true
   dismantle: true
 
+debug:
+  enabled: false
+  blocks-per-tick: 1000
+
 disabled-worlds: []

@@ -30,6 +30,9 @@ public class ShrineConfig {
     private int schematicPasteDelayTicks;
     private List<String> disabledWorlds;
 
+    private boolean debugEnabled;
+    private int debugBlocksPerTick;
+
     private boolean activationParticles;
     private boolean ambientParticles;
     private int ambientParticleInterval;
@@ -84,6 +87,10 @@ public class ShrineConfig {
         disabledWorlds = plugin.getConfig().getStringList("disabled-worlds");
         if (disabledWorlds == null) disabledWorlds = Collections.emptyList();
 
+        ConfigurationSection debug = plugin.getConfig().getConfigurationSection("debug");
+        debugEnabled = debug != null && debug.getBoolean("enabled", false);
+        debugBlocksPerTick = debug != null ? debug.getInt("blocks-per-tick", 1000) : 1000;
+
         ConfigurationSection particles = plugin.getConfig().getConfigurationSection("particles");
         activationParticles = particles.getBoolean("activation", true);
         ambientParticles = particles.getBoolean("ambient", true);
@@ -118,6 +125,9 @@ public class ShrineConfig {
     public String getSchematicFileName() { return schematicFileName; }
     public int getSchematicPasteDelayTicks() { return schematicPasteDelayTicks; }
     public List<String> getDisabledWorlds() { return disabledWorlds; }
+
+    public boolean isDebugEnabled() { return debugEnabled; }
+    public int getDebugBlocksPerTick() { return debugBlocksPerTick; }
 
     public boolean isActivationParticles() { return activationParticles; }
     public boolean isAmbientParticles() { return ambientParticles; }
