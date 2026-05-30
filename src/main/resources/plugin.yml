@@ -1,0 +1,21 @@
+name: MalevolentShrine
+version: '${version}'
+
+main: dev.nguyendevs.malevolentshrine.MalevolentShrinePlugin
+api-version: '1.21'
+load: POSTWORLD
+depend: [ProtocolLib]
+softdepend: [WorldGuard, FastAsyncWorldEdit]
+
+commands:
+  shrine:
+    description: Main MalevolentShrine command
+    usage: /<command> <reload|activate|deactivate>
+
+permissions:
+  malevolentshrine.admin:
+    description: Allows reloading the shrine config
+    default: op
+  malevolentshrine.use:
+    description: Allows activating and deactivating the shrine
+    default: true

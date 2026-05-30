@@ -1,0 +1,46 @@
+shrine:
+  default-radius: 100
+  duration-seconds: 30
+  energy:
+    type: XP
+    cost-per-second: 2.0
+
+effects:
+  weakness-amplifier: 0
+  weakness-duration-ticks: 200
+  reapply-interval-ticks: 200
+  caster-resistance-amplifier: 0
+  caster-regen-amplifier: 0
+  caster-regen-interval-ticks: 100
+
+cleave:
+  damage-percent: 0.75
+  interval-min-ticks: 10
+  interval-max-ticks: 30
+
+dismantle:
+  chunk-size: 15
+  gap-size: 5
+
+terrain:
+  lava-chance: 0.04
+
+schematic:
+  file-name: shrine
+  paste-delay-ticks: 20
+
+particles:
+  activation: true
+  deactivation: true
+  ambient: true
+  ambient-interval-ticks: 5
+  cleave: true
+  dismantle: true
+
+sounds:
+  activation: true
+  deactivation: true
+  cleave: true
+  dismantle: true
+
+disabled-worlds: []
