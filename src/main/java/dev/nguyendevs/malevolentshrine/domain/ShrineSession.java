@@ -1,8 +1,8 @@
 package dev.nguyendevs.malevolentshrine.domain;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
@@ -18,13 +18,14 @@ public class ShrineSession {
     private int elapsedTicks;
     private boolean active;
     private int taskId;
-    private final Map<Long, BlockData> originalSurfaceBlocks;
-    private final Map<Long, BlockData> originalDismantleBlocks;
-    private final Map<Long, BlockData> schematicOriginalBlocks;
+    private final Set<BlockPos> originalSurfaceBlocks;
+    private final Set<BlockPos> originalDismantleBlocks;
+    private final Set<BlockPos> schematicOriginalBlocks;
     private final Set<Entity> affectedEntities;
     private int cleaveTickCounter;
     private int cleaveNextInterval;
     private final List<Integer> dismantleTaskIds;
+    private int schematicPasteTaskId;
     private final BossBar bossBar;
     private final Set<UUID> bossBarViewers;
 
@@ -36,13 +37,14 @@ public class ShrineSession {
         this.elapsedTicks = 0;
         this.active = true;
         this.taskId = -1;
-        this.originalSurfaceBlocks = new HashMap<>();
-        this.originalDismantleBlocks = new HashMap<>();
-        this.schematicOriginalBlocks = new HashMap<>();
+        this.originalSurfaceBlocks = new HashSet<>();
+        this.originalDismantleBlocks = new HashSet<>();
+        this.schematicOriginalBlocks = new HashSet<>();
         this.affectedEntities = new HashSet<>();
         this.dismantleTaskIds = new ArrayList<>();
+        this.schematicPasteTaskId = -1;
         this.bossBar = Bukkit.createBossBar(
-                "Malevolent Shrine",
+                ChatColor.DARK_RED + "Malevolent Shrine",
                 BarColor.RED,
                 BarStyle.SEGMENTED_20
         );
@@ -59,9 +61,9 @@ public class ShrineSession {
     public void setActive(boolean active) { this.active = active; }
     public int getTaskId() { return taskId; }
     public void setTaskId(int taskId) { this.taskId = taskId; }
-    public Map<Long, BlockData> getOriginalSurfaceBlocks() { return originalSurfaceBlocks; }
-    public Map<Long, BlockData> getOriginalDismantleBlocks() { return originalDismantleBlocks; }
-    public Map<Long, BlockData> getSchematicOriginalBlocks() { return schematicOriginalBlocks; }
+    public Set<BlockPos> getOriginalSurfaceBlocks() { return originalSurfaceBlocks; }
+    public Set<BlockPos> getOriginalDismantleBlocks() { return originalDismantleBlocks; }
+    public Set<BlockPos> getSchematicOriginalBlocks() { return schematicOriginalBlocks; }
     public Set<Entity> getAffectedEntities() { return affectedEntities; }
     public int getCleaveTickCounter() { return cleaveTickCounter; }
     public void setCleaveTickCounter(int cleaveTickCounter) { this.cleaveTickCounter = cleaveTickCounter; }
@@ -70,6 +72,9 @@ public class ShrineSession {
 
     public List<Integer> getDismantleTaskIds() { return dismantleTaskIds; }
     public void addDismantleTaskId(int taskId) { dismantleTaskIds.add(taskId); }
+
+    public int getSchematicPasteTaskId() { return schematicPasteTaskId; }
+    public void setSchematicPasteTaskId(int schematicPasteTaskId) { this.schematicPasteTaskId = schematicPasteTaskId; }
 
     public BossBar getBossBar() { return bossBar; }
     public Set<UUID> getBossBarViewers() { return bossBarViewers; }

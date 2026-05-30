@@ -1,6 +1,6 @@
 shrine:
   default-radius: 100
-  duration-seconds: 30
+  duration-seconds: 300
   energy:
     type: XP
     cost-per-second: 2.0
@@ -14,18 +14,14 @@ effects:
   caster-regen-interval-ticks: 100
 
 cleave:
-  damage-per-second: 4.0
-  interval-min-ticks: 10
-  interval-max-ticks: 30
+  damage: 8.0
 
 dismantle:
-  chunk-size: 15
-  gap-size: 5
-
-terrain:
-  lava-chance: 0.04
+  chunk-size: 5
+  gap-size: 2
 
 schematic:
+  enabled: true
   file-name: shrine
   paste-delay-ticks: 20
 

@@ -9,13 +9,13 @@ public class BlockPatternGenerator {
 
     public static Set<Long> generateRoots(int cx, int cz, int radius) {
         Set<Long> out = new HashSet<>();
-        int branches = 8;
+        int branches = 5;
         double angleStep = 2 * Math.PI / branches;
         Random random = ThreadLocalRandom.current();
 
         for (int i = 0; i < branches; i++) {
             double angle = i * angleStep + (random.nextDouble() - 0.5) * 0.3;
-            growBranch(out, cx, cz, angle, radius * 0.9, 3, 0, radius * 0.9, random);
+            growBranch(out, cx, cz, angle, radius * 0.85, 5, 0, radius * 0.85, random);
         }
 
         return out;
@@ -34,15 +34,10 @@ public class BlockPatternGenerator {
 
         paintWidth(out, bx, bz, width);
 
-        double deviate = (random.nextDouble() - 0.5) * Math.toRadians(40);
-        int newWidth = Math.max(1, width - (steps / 15));
+        double deviate = (random.nextDouble() - 0.5) * Math.toRadians(30);
+        int newWidth = Math.max(2, width - (steps / 12));
 
         growBranch(out, (float) nx, (float) nz, angle + deviate, remaining - step, newWidth, steps + 1, maxRadius, random);
-
-        if (remaining > maxRadius * 0.4 && random.nextDouble() < 0.15) {
-            double splitAngle = angle + Math.toRadians(45) + (random.nextDouble() - 0.5) * Math.toRadians(20);
-            growBranch(out, (float) nx, (float) nz, splitAngle, remaining * 0.6, Math.max(1, width - 1), 0, maxRadius, random);
-        }
     }
 
     private static void paintWidth(Set<Long> out, int bx, int bz, int width) {

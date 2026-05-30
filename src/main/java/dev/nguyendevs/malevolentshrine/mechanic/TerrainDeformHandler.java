@@ -1,26 +1,25 @@
 package dev.nguyendevs.malevolentshrine.mechanic;
 
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
+import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.util.BlockPatternGenerator;
-import dev.nguyendevs.malevolentshrine.util.BlockPosUtil;
-import dev.nguyendevs.malevolentshrine.util.ParticleUtil;
 import org.bukkit.Chunk;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.Sound;
-import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class TerrainDeformHandler {
-    private static final double LAVA_CHANCE = 0.04;
-
     private final JavaPlugin plugin;
 
     private static final Material[] ROOT_BLOCKS = {
@@ -33,16 +32,17 @@ public class TerrainDeformHandler {
     }
 
     public void apply(ShrineSession session, ShrineConfig config) {
-        applySurfaceReplacement(session, config);
-        applyDismantle(session, config);
+        int id1 = applySurfaceReplacement(session, config);
+        if (id1 != -1) session.addDismantleTaskId(id1);
+        int id2 = applyDismantle(session, config);
+        if (id2 != -1) session.addDismantleTaskId(id2);
     }
 
-    private void applySurfaceReplacement(ShrineSession session, ShrineConfig config) {
-        long startTime = System.nanoTime();
-
+    private int applySurfaceReplacement(ShrineSession session, ShrineConfig config) {
         Location center = session.getCenter();
         World world = center.getWorld();
-        if (world == null) return;
+        if (world == null) return -1;
+
         int cx = center.getBlockX();
         int cy = center.getBlockY();
         int cz = center.getBlockZ();
@@ -51,7 +51,88 @@ public class TerrainDeformHandler {
 
         Set<Long> roots = BlockPatternGenerator.generateRoots(cx, cz, radius);
 
-        Map<Long, BlockData> replacements = new HashMap<>();
+        int minY = Math.max(world.getMinHeight(), cy - radius);
+        int maxYBlock = Math.min(world.getMaxHeight() - 1, cy + radius);
+        int minChunkX = (cx - radius) >> 4;
+        int maxChunkX = (cx + radius) >> 4;
+        int minChunkZ = (cz - radius) >> 4;
+        int maxChunkZ = (cz + radius) >> 4;
+
+        List<BlockEdit> edits = new ArrayList<>();
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        Set<BlockPos> surfaceBlocks = session.getOriginalSurfaceBlocks();
+
+        BlockData soulSand = Material.SOUL_SAND.createBlockData();
+        BlockData soulSoil = Material.SOUL_SOIL.createBlockData();
+
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
+
+                Chunk chunk = world.getChunkAt(chunkX, chunkZ);
+                ChunkSnapshot snap = chunk.getChunkSnapshot();
+
+                int cxOff = chunkX << 4;
+                int czOff = chunkZ << 4;
+
+                for (int lx = 0; lx < 16; lx++) {
+                    int wx = cxOff | lx;
+                    int dx = wx - cx;
+                    int dxSq = dx * dx;
+
+                    for (int lz = 0; lz < 16; lz++) {
+                        int wz = czOff | lz;
+                        int dz = wz - cz;
+                        if (dxSq + dz * dz > radiusSq) continue;
+
+                        int yRange = (int) Math.sqrt(radiusSq - dxSq - dz * dz);
+                        int wyStart = Math.max(minY, cy - yRange);
+                        int wyEnd = Math.min(maxYBlock, cy + yRange);
+
+                        for (int wy = wyEnd; wy >= wyStart; wy--) {
+                            int dy = wy - cy;
+                            if (dxSq + dz * dz + dy * dy > radiusSq) continue;
+
+                            if (snap.getBlockType(lx, wy, lz).isEmpty()) continue;
+
+                            BlockPos bp = new BlockPos(wx, wy, wz, snap.getBlockData(lx, wy, lz));
+                            if (surfaceBlocks.contains(bp)) continue;
+                            surfaceBlocks.add(bp);
+
+                            BlockData replacement;
+                            if (roots.contains(BlockPatternGenerator.pack(wx, wz))) {
+                                replacement = ROOT_BLOCKS[rng.nextInt(ROOT_BLOCKS.length)].createBlockData();
+                            } else {
+                                replacement = rng.nextBoolean() ? soulSand : soulSoil;
+                            }
+                            edits.add(new BlockEdit(wx, wy, wz, replacement));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        edits.sort(Comparator.comparingInt(e ->
+                Math.abs(e.x - cx) + Math.abs(e.y - cy) + Math.abs(e.z - cz)));
+
+        return scheduleEdits(world, edits, config);
+    }
+
+    private int applyDismantle(ShrineSession session, ShrineConfig config) {
+        Location center = session.getCenter();
+        World world = center.getWorld();
+        if (world == null) return -1;
+
+        int cx = center.getBlockX();
+        int cy = center.getBlockY();
+        int cz = center.getBlockZ();
+        int radius = (int) session.getRadius();
+        double radiusSq = radius * radius;
+
+        int chunkSize = config.getDismantleChunkSize();
+        int gapSize = config.getDismantleGapSize();
+        int cellSize = chunkSize + gapSize;
 
         int minY = Math.max(world.getMinHeight(), cy - radius);
         int maxYBlock = Math.min(world.getMaxHeight() - 1, cy + radius);
@@ -60,26 +141,17 @@ public class TerrainDeformHandler {
         int minChunkZ = (cz - radius) >> 4;
         int maxChunkZ = (cz + radius) >> 4;
 
-        ThreadLocalRandom rng = ThreadLocalRandom.current();
-
-        BlockData soulSand = Material.SOUL_SAND.createBlockData();
-        BlockData soulSoil = Material.SOUL_SOIL.createBlockData();
-        BlockData lava = Material.LAVA.createBlockData();
-        BlockData[] rootBlockData = {
-                Material.NETHERRACK.createBlockData(),
-                Material.NETHER_WART_BLOCK.createBlockData(),
-                Material.CRIMSON_NYLIUM.createBlockData(),
-                Material.MAGMA_BLOCK.createBlockData()
-        };
-
-        int replacedCount = 0;
+        List<BlockEdit> edits = new ArrayList<>();
+        BlockData air = Material.AIR.createBlockData();
+        Set<BlockPos> dismantleBlocks = session.getOriginalDismantleBlocks();
+        Set<BlockPos> surfaceBlocks = session.getOriginalSurfaceBlocks();
 
         for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
                 if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
 
                 Chunk chunk = world.getChunkAt(chunkX, chunkZ);
-                ChunkSnapshot snapshot = chunk.getChunkSnapshot();
+                ChunkSnapshot snap = chunk.getChunkSnapshot();
 
                 int cxOff = chunkX << 4;
                 int czOff = chunkZ << 4;
@@ -92,211 +164,120 @@ public class TerrainDeformHandler {
                     for (int lz = 0; lz < 16; lz++) {
                         int wz = czOff | lz;
                         int dz = wz - cz;
-                        int distXZ = dxSq + dz * dz;
-                        if (distXZ > radiusSq) continue;
+                        if (dxSq + dz * dz > radiusSq) continue;
 
-                        int maxDy = (int) Math.sqrt(radiusSq - distXZ);
-                        int wyStart = Math.max(minY, cy - maxDy);
-                        int wyEnd = Math.min(maxYBlock, cy + maxDy);
+                        int yRange = (int) Math.sqrt(radiusSq - dxSq - dz * dz);
+                        int wyStart = Math.max(minY, cy - yRange);
+                        int wyEnd = Math.min(maxYBlock, cy + yRange);
+                        int startY = Math.max(cy + 1, wyStart);
 
-                        for (int wy = wyStart; wy <= wyEnd; wy++) {
+                        for (int wy = startY; wy <= wyEnd; wy++) {
                             int dy = wy - cy;
-                            int distSq = distXZ + dy * dy;
-                            if (distSq > radiusSq) continue;
+                            if (dxSq + dz * dz + dy * dy > radiusSq) continue;
 
-                            if (snapshot.getBlockType(lx, wy, lz).isEmpty()) continue;
+                            int rx = ((wx - cx) % cellSize + cellSize) % cellSize;
+                            int ry = ((wy - cy) % cellSize + cellSize) % cellSize;
+                            int rz = ((wz - cz) % cellSize + cellSize) % cellSize;
 
-                            long keyXyz = BlockPosUtil.pack(wx, wy, wz);
-                            if (session.getOriginalSurfaceBlocks().containsKey(keyXyz)) continue;
+                            if (rx < chunkSize && ry < chunkSize && rz < chunkSize) continue;
 
-                            BlockData originalData = snapshot.getBlockData(lx, wy, lz);
-                            session.getOriginalSurfaceBlocks().put(keyXyz, originalData);
+                            if (snap.getBlockType(lx, wy, lz).isEmpty()) continue;
 
-                            BlockData replacement;
-                            if (roots.contains(BlockPatternGenerator.pack(wx, wz))) {
-                                replacement = rng.nextDouble() < LAVA_CHANCE ? lava : rootBlockData[rng.nextInt(rootBlockData.length)];
-                            } else {
-                                replacement = rng.nextBoolean() ? soulSand : soulSoil;
-                            }
+                            BlockPos bp = new BlockPos(wx, wy, wz, snap.getBlockData(lx, wy, lz));
+                            if (dismantleBlocks.contains(bp)) continue;
+                            if (surfaceBlocks.contains(bp)) continue;
+                            dismantleBlocks.add(bp);
 
-                            replacements.put(keyXyz, replacement);
-                            replacedCount++;
+                            edits.add(new BlockEdit(wx, wy, wz, air));
                         }
                     }
                 }
             }
         }
 
-        int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, replacements, config.getDebugBlocksPerTick(), config.isDebugEnabled());
-        if (taskId != -1) {
-            session.addDismantleTaskId(taskId);
-        }
+        edits.sort(Comparator.comparingInt(e ->
+                Math.abs(e.x - cx) + Math.abs(e.y - cy) + Math.abs(e.z - cz)));
 
-        if (config.isDebugEnabled()) {
-            long elapsed = System.nanoTime() - startTime;
-            plugin.getLogger().info(String.format(
-                    "[ShrineDebug] SurfaceReplace: %d blocks, %.2f ms",
-                    replacedCount, elapsed / 1_000_000.0
-            ));
-        }
+        return scheduleEdits(world, edits, config);
     }
 
-    private void applyDismantle(ShrineSession session, ShrineConfig config) {
-        long startTime = System.nanoTime();
+    private int scheduleEdits(World world, List<BlockEdit> edits, ShrineConfig config) {
+        if (edits.isEmpty()) return -1;
 
-        Location center = session.getCenter();
-        World world = center.getWorld();
-        if (world == null) return;
-        int cx = center.getBlockX();
-        int cy = center.getBlockY();
-        int cz = center.getBlockZ();
-        double radius = session.getRadius();
-        double radiusSq = radius * radius;
+        int blocksPerTick = config.getDebugBlocksPerTick();
+        int total = edits.size();
+        int[] idx = {0};
+        long startTime = config.isDebugEnabled() ? System.nanoTime() : 0;
 
-        int chunkSize = config.getDismantleChunkSize();
-        int gapSize = config.getDismantleGapSize();
-        int cellSize = chunkSize + gapSize;
+        BukkitRunnable task = new BukkitRunnable() {
+            private int lastCX = Integer.MIN_VALUE;
+            private int lastCZ = Integer.MIN_VALUE;
+            private Chunk chunk = null;
 
-        int minY = Math.max(world.getMinHeight(), cy - (int) radius);
-        int maxYBlock = Math.min(world.getMaxHeight() - 1, cy + (int) radius);
-        int minChunkX = (cx - (int) radius) >> 4;
-        int maxChunkX = (cx + (int) radius) >> 4;
-        int minChunkZ = (cz - (int) radius) >> 4;
-        int maxChunkZ = (cz + (int) radius) >> 4;
-
-        Map<Integer, List<long[]>> layers = new LinkedHashMap<>();
-        int maxLayer = 0;
-        int totalFound = 0;
-
-        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
-
-                Chunk chunk = world.getChunkAt(chunkX, chunkZ);
-                ChunkSnapshot snapshot = chunk.getChunkSnapshot();
-
-                int cxOff = chunkX << 4;
-                int czOff = chunkZ << 4;
-
-                for (int lx = 0; lx < 16; lx++) {
-                    int wx = cxOff | lx;
-                    int dx = wx - cx;
-                    int dxSq = dx * dx;
-
-                    for (int lz = 0; lz < 16; lz++) {
-                        int wz = czOff | lz;
-                        int dz = wz - cz;
-                        int distXZ = dxSq + dz * dz;
-                        if (distXZ > radiusSq) continue;
-
-                        int rx = ((wx - cx) % cellSize + cellSize) % cellSize;
-                        int rz = ((wz - cz) % cellSize + cellSize) % cellSize;
-
-                        int maxDy = (int) Math.sqrt(radiusSq - distXZ);
-                        int wyStart = Math.max(minY, cy - maxDy);
-                        int wyEnd = Math.min(maxYBlock, cy + maxDy);
-
-                        for (int wy = wyStart; wy <= wyEnd; wy++) {
-                            int dy = wy - cy;
-                            int distSq = distXZ + dy * dy;
-                            if (distSq > radiusSq) continue;
-
-                            int ry = ((wy - cy) % cellSize + cellSize) % cellSize;
-                            if (rx < chunkSize && rz < chunkSize && ry < chunkSize) continue;
-
-                            if (snapshot.getBlockType(lx, wy, lz).isEmpty()) continue;
-
-                            long keyXyz = BlockPosUtil.pack(wx, wy, wz);
-                            if (session.getOriginalSurfaceBlocks().containsKey(keyXyz)) continue;
-                            if (session.getOriginalDismantleBlocks().containsKey(keyXyz)) continue;
-
-                            BlockData originalData = snapshot.getBlockData(lx, wy, lz);
-                            session.getOriginalDismantleBlocks().put(keyXyz, originalData);
-
-                            int dist = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
-                            int layer = dist / cellSize;
-                            layers.computeIfAbsent(layer, k -> new ArrayList<>()).add(new long[]{keyXyz, 0});
-                            if (layer > maxLayer) maxLayer = layer;
-                            totalFound++;
-                        }
+            @Override
+            public void run() {
+                for (int i = 0; i < blocksPerTick && idx[0] < edits.size(); i++) {
+                    BlockEdit e = edits.get(idx[0]++);
+                    int cx = e.x >> 4;
+                    int cz = e.z >> 4;
+                    if (cx != lastCX || cz != lastCZ) {
+                        lastCX = cx;
+                        lastCZ = cz;
+                        chunk = world.getChunkAt(cx, cz);
+                    }
+                    if (chunk != null) {
+                        chunk.getBlock(e.x & 15, e.y, e.z & 15).setBlockData(e.data, false);
                     }
                 }
-            }
-        }
-
-        if (config.isDebugEnabled()) {
-            long elapsed = System.nanoTime() - startTime;
-            plugin.getLogger().info(String.format(
-                    "[ShrineDebug] DismantleScan: %d blocks, %d layers, %.2f ms",
-                    totalFound, maxLayer + 1, elapsed / 1_000_000.0
-            ));
-        }
-
-        Material dismantleParticleMat = Material.STONE;
-        int blocksPerTick = config.getDebugBlocksPerTick();
-
-        for (int layer = 0; layer <= maxLayer; layer++) {
-            List<long[]> layerBlocks = layers.get(layer);
-            if (layerBlocks == null || layerBlocks.isEmpty()) continue;
-
-            final Material particleMat = dismantleParticleMat;
-            int delay = layer * 2;
-
-            int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, layerBlocks, Material.AIR, blocksPerTick, config.isDebugEnabled());
-            if (taskId != -1) {
-                session.addDismantleTaskId(taskId);
-            }
-
-            long blockCount = layerBlocks.size();
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                if (config.isDismantleParticles() && blockCount > 0) {
-                    long[] first = layerBlocks.get(ThreadLocalRandom.current().nextInt(layerBlocks.size()));
-                    int px = BlockPosUtil.unpackX(first[0]);
-                    int py = BlockPosUtil.unpackY(first[0]);
-                    int pz = BlockPosUtil.unpackZ(first[0]);
-                    Location ploc = new Location(world, px + 0.5, py + 0.5, pz + 0.5);
-                    ParticleUtil.spawnDismantleParticle(ploc, particleMat);
+                if (idx[0] >= edits.size()) {
+                    if (config.isDebugEnabled()) {
+                        plugin.getLogger().info(String.format(
+                                "[ShrineDebug] SetBlocks: %d blocks in %.2f ms",
+                                total, (System.nanoTime() - startTime) / 1_000_000.0));
+                    }
+                    cancel();
                 }
-                if (config.isDismantleSounds()) {
-                    world.playSound(center, Sound.BLOCK_STONE_BREAK, SoundCategory.BLOCKS, 0.5f,
-                            0.8f + ThreadLocalRandom.current().nextFloat() * 0.4f);
-                }
-            }, delay);
-        }
+            }
+        };
+
+        return task.runTaskTimer(plugin, 0, 1).getTaskId();
     }
 
     public void restore(ShrineSession session, ShrineConfig config) {
         World world = session.getCenter().getWorld();
         if (world == null) return;
 
-        long startTime = System.nanoTime();
-
-        int surfaceTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalSurfaceBlocks(), config.getDebugBlocksPerTick(), config.isDebugEnabled());
-        if (surfaceTaskId != -1) {
-            session.addDismantleTaskId(surfaceTaskId);
+        if (!session.getOriginalSurfaceBlocks().isEmpty()) {
+            List<BlockEdit> edits = new ArrayList<>();
+            for (BlockPos bp : session.getOriginalSurfaceBlocks()) {
+                edits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+            }
+            scheduleEdits(world, edits, config);
         }
 
-        int dismantleTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalDismantleBlocks(), config.getDebugBlocksPerTick(), config.isDebugEnabled());
-        if (dismantleTaskId != -1) {
-            session.addDismantleTaskId(dismantleTaskId);
+        if (!session.getOriginalDismantleBlocks().isEmpty()) {
+            List<BlockEdit> edits = new ArrayList<>();
+            for (BlockPos bp : session.getOriginalDismantleBlocks()) {
+                edits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+            }
+            scheduleEdits(world, edits, config);
         }
 
         if (!session.getSchematicOriginalBlocks().isEmpty()) {
-            int schemTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getSchematicOriginalBlocks(), config.getDebugBlocksPerTick(), config.isDebugEnabled());
-            if (schemTaskId != -1) {
-                session.addDismantleTaskId(schemTaskId);
+            List<BlockEdit> edits = new ArrayList<>();
+            for (BlockPos bp : session.getSchematicOriginalBlocks()) {
+                edits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
             }
-        }
-
-        if (config.isDebugEnabled()) {
-            long elapsed = System.nanoTime() - startTime;
-            plugin.getLogger().info(String.format(
-                    "[ShrineDebug] Restore: %d surface + %d dismantle + %d schematic blocks, %.2f ms",
-                    session.getOriginalSurfaceBlocks().size(),
-                    session.getOriginalDismantleBlocks().size(),
-                    session.getSchematicOriginalBlocks().size(),
-                    elapsed / 1_000_000.0
-            ));
+            scheduleEdits(world, edits, config);
         }
     }
+
+    private static class BlockEdit {
+        final int x, y, z;
+        final BlockData data;
+        BlockEdit(int x, int y, int z, BlockData data) {
+            this.x = x; this.y = y; this.z = z; this.data = data;
+        }
+    }
+
 }

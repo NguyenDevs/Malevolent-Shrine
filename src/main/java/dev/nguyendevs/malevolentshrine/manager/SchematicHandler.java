@@ -1,18 +1,16 @@
 package dev.nguyendevs.malevolentshrine.manager;
 
-import dev.nguyendevs.malevolentshrine.util.BlockPosUtil;
+import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.World;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 public class SchematicHandler {
     private static Boolean WORLDEDIT_AVAILABLE;
@@ -30,9 +28,8 @@ public class SchematicHandler {
         return WORLDEDIT_AVAILABLE;
     }
 
-    /** Pastes a schematic and returns a map of original blocks that were overwritten, keyed by BlockPosUtil.pack. */
-    public static Map<Long, BlockData> pasteAndCapture(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
-        Map<Long, BlockData> result = new HashMap<>();
+    public static Set<BlockPos> pasteAndCapture(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
+        Set<BlockPos> result = new HashSet<>();
         if (!isAvailable() || !schemFile.exists()) return result;
 
         try {
@@ -81,7 +78,7 @@ public class SchematicHandler {
 
                 for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
                     for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                        Chunk chunk = world.getChunkAt(chunkX, chunkZ);
+                        Chunk bukkitChunk = world.getChunkAt(chunkX, chunkZ);
                         int baseX = chunkX << 4;
                         int baseZ = chunkZ << 4;
 
@@ -95,8 +92,8 @@ public class SchematicHandler {
                             for (int by = startY; by <= endY; by++) {
                                 for (int lz = localStartZ; lz <= localEndZ; lz++) {
                                     int wz = baseZ | lz;
-                                    result.put(BlockPosUtil.pack(wx, by, wz),
-                                            chunk.getBlock(lx, by, lz).getBlockData().clone());
+                                    result.add(new BlockPos(wx, by, wz,
+                                            bukkitChunk.getBlock(lx, by, lz).getBlockData().clone()));
                                 }
                             }
                         }
@@ -129,13 +126,15 @@ public class SchematicHandler {
                     Class.forName("com.sk89q.worldedit.function.operation.Operations")
                             .getMethod("complete", Class.forName("com.sk89q.worldedit.function.operation.Operation"))
                             .invoke(null, operation);
+                } catch (Throwable e) {
+                    plugin.getLogger().warning("Failed to paste schematic (undo will still work): " + e.getMessage());
                 } finally {
                     editorClass.getMethod("close").invoke(editSession);
                 }
             }
             return result;
         } catch (Throwable e) {
-            plugin.getLogger().warning("Failed to paste schematic: " + e.getMessage());
+            plugin.getLogger().warning("Failed to load schematic: " + e.getMessage());
             return result;
         }
     }

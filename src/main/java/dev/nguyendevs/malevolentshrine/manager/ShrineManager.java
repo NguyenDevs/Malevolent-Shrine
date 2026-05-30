@@ -13,15 +13,16 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import java.io.File;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -84,18 +85,21 @@ public class ShrineManager {
             center.getWorld().playSound(center, Sound.BLOCK_BEACON_ACTIVATE, SoundCategory.AMBIENT, 1.5f, 0.3f);
         }
 
-        File schemFile = new File(plugin.getDataFolder(), config.getSchematicFileName() + ".schem");
-        int delay = config.getSchematicPasteDelayTicks();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            Map<Long, BlockData> originalBlocks = SchematicHandler.pasteAndCapture(
-                    schemFile, center.getWorld(),
-                    center.getBlockX(), center.getBlockY(), center.getBlockZ(), plugin
-            );
-            session.getSchematicOriginalBlocks().putAll(originalBlocks);
-            if (config.isDebugEnabled()) {
-                plugin.getLogger().info("[ShrineDebug] Schematic pasted, captured " + originalBlocks.size() + " original blocks");
-            }
-        }, delay);
+        if (config.isSchematicEnabled()) {
+            File schemFile = new File(plugin.getDataFolder(), config.getSchematicFileName() + ".schem");
+            int delay = config.getSchematicPasteDelayTicks();
+            int schemTaskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                Set<BlockPos> originalBlocks = SchematicHandler.pasteAndCapture(
+                        schemFile, center.getWorld(),
+                        center.getBlockX(), center.getBlockY(), center.getBlockZ(), plugin
+                );
+                session.getSchematicOriginalBlocks().addAll(originalBlocks);
+                if (config.isDebugEnabled()) {
+                    plugin.getLogger().info("[ShrineDebug] Schematic pasted, captured " + originalBlocks.size() + " original blocks");
+                }
+            }, delay).getTaskId();
+            session.setSchematicPasteTaskId(schemTaskId);
+        }
 
         ShrineTickTask task = new ShrineTickTask(this, config, cleaveHandler, auraHandler, session);
         int taskId = task.runTaskTimer(plugin, 0, 1).getTaskId();
@@ -120,6 +124,10 @@ public class ShrineManager {
         session.setActive(false);
 
         plugin.getServer().getScheduler().cancelTask(session.getTaskId());
+
+        if (session.getSchematicPasteTaskId() != -1) {
+            Bukkit.getScheduler().cancelTask(session.getSchematicPasteTaskId());
+        }
 
         for (int taskId : session.getDismantleTaskIds()) {
             Bukkit.getScheduler().cancelTask(taskId);

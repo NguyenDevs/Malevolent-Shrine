@@ -20,12 +20,9 @@ public class ShrineConfig {
     private int casterResistanceAmplifier;
     private int casterRegenAmplifier;
     private int casterRegenIntervalTicks;
-    private double cleaveDamagePerSecond;
-    private int cleaveIntervalMinTicks;
-    private int cleaveIntervalMaxTicks;
+    private double cleaveDamage;
     private int dismantleChunkSize;
     private int dismantleGapSize;
-    private double lavaChance;
     private String schematicFileName;
     private int schematicPasteDelayTicks;
     private List<String> disabledWorlds;
@@ -33,6 +30,7 @@ public class ShrineConfig {
     private boolean debugEnabled;
     private int debugBlocksPerTick;
 
+    private boolean schematicEnabled;
     private boolean activationParticles;
     private boolean ambientParticles;
     private int ambientParticleInterval;
@@ -69,18 +67,14 @@ public class ShrineConfig {
         casterRegenIntervalTicks = effects.getInt("caster-regen-interval-ticks", 100);
 
         ConfigurationSection cleave = plugin.getConfig().getConfigurationSection("cleave");
-        cleaveDamagePerSecond = cleave.getDouble("damage-per-second", 4.0);
-        cleaveIntervalMinTicks = cleave.getInt("interval-min-ticks", 10);
-        cleaveIntervalMaxTicks = cleave.getInt("interval-max-ticks", 30);
+        cleaveDamage = cleave.getDouble("damage", 8.0);
 
         ConfigurationSection dismantle = plugin.getConfig().getConfigurationSection("dismantle");
-        dismantleChunkSize = dismantle.getInt("chunk-size", 15);
-        dismantleGapSize = dismantle.getInt("gap-size", 5);
-
-        ConfigurationSection terrain = plugin.getConfig().getConfigurationSection("terrain");
-        lavaChance = terrain.getDouble("lava-chance", 0.04);
+        dismantleChunkSize = dismantle.getInt("chunk-size", 5);
+        dismantleGapSize = dismantle.getInt("gap-size", 2);
 
         ConfigurationSection schematic = plugin.getConfig().getConfigurationSection("schematic");
+        schematicEnabled = schematic.getBoolean("enabled", true);
         schematicFileName = schematic.getString("file-name", "shrine");
         schematicPasteDelayTicks = schematic.getInt("paste-delay-ticks", 20);
 
@@ -116,12 +110,10 @@ public class ShrineConfig {
     public int getCasterResistanceAmplifier() { return casterResistanceAmplifier; }
     public int getCasterRegenAmplifier() { return casterRegenAmplifier; }
     public int getCasterRegenIntervalTicks() { return casterRegenIntervalTicks; }
-    public double getCleaveDamagePerSecond() { return cleaveDamagePerSecond; }
-    public int getCleaveIntervalMinTicks() { return cleaveIntervalMinTicks; }
-    public int getCleaveIntervalMaxTicks() { return cleaveIntervalMaxTicks; }
+    public double getCleaveDamage() { return cleaveDamage; }
     public int getDismantleChunkSize() { return dismantleChunkSize; }
     public int getDismantleGapSize() { return dismantleGapSize; }
-    public double getLavaChance() { return lavaChance; }
+    public boolean isSchematicEnabled() { return schematicEnabled; }
     public String getSchematicFileName() { return schematicFileName; }
     public int getSchematicPasteDelayTicks() { return schematicPasteDelayTicks; }
     public List<String> getDisabledWorlds() { return disabledWorlds; }
