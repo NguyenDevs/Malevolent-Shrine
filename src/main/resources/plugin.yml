@@ -9,12 +9,28 @@ softdepend: [WorldGuard, FastAsyncWorldEdit, ProtocolLib]
 commands:
   shrine:
     description: Main MalevolentShrine command
-    usage: /<command> <reload|activate|deactivate>
+    usage: /<command> [reload]
+    aliases: [sukuna]
 
 permissions:
   malevolentshrine.admin:
     description: Allows reloading the shrine config
     default: op
   malevolentshrine.use:
-    description: Allows activating and deactivating the shrine
+    description: Allows using shrine skills and opening the GUI
+    default: true
+  malevolentshrine.use.domain-expansion:
+    description: Allows using Domain Expansion
+    default: true
+  malevolentshrine.use.cleave:
+    description: Allows using Cleave
+    default: true
+  malevolentshrine.use.dismantle:
+    description: Allows using Dismantle
+    default: true
+  malevolentshrine.use.rct:
+    description: Allows using Reverse Cursed Technique
+    default: true
+  malevolentshrine.use.divine-flame:
+    description: Allows using Divine Flame
     default: true

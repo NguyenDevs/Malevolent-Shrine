@@ -1,0 +1,22 @@
+prefix: "&8[&4Malevolent Shrine&8] &r"
+
+no-permission: "&cYou don't have permission!"
+config-reloaded: "&aConfig reloaded."
+only-players: "&cOnly players can use this command."
+no-permission-skill: "&cYou don't have permission for this skill!"
+
+domain-already-active: "&cDomain Expansion already active!"
+world-disabled: "&cShrine cannot be used in this world!"
+area-not-allowed: "&cShrine is not allowed in this area!"
+area-protected: "&cThis area is protected! Shrine cannot be activated here!"
+domain-activated: "&4Domain Expansion: Malevolent Shrine!"
+domain-deactivated: "&7Domain Expansion ended."
+no-energy: "&cNot enough energy! Shrine deactivated."
+
+cleave-activated: "&cCleave!"
+dismantle-activated: "&7Dismantle!"
+rct-activated: "&aReverse Cursed Technique activated!"
+divine-flame-activated: "&6Divine Flame!"
+
+skill-select-title: "&fSelected: &c{skill}"
+skill-select-subtitle: "&7Shift + Left-Click to activate"

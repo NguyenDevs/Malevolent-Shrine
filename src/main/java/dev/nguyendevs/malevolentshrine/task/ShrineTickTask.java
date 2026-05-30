@@ -3,11 +3,11 @@ package dev.nguyendevs.malevolentshrine.task;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.EnergyType;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
+import dev.nguyendevs.malevolentshrine.manager.MessageManager;
 import dev.nguyendevs.malevolentshrine.manager.ShrineManager;
+import dev.nguyendevs.malevolentshrine.manager.SkillToggleManager;
 import dev.nguyendevs.malevolentshrine.mechanic.CleaveSweepHandler;
 import dev.nguyendevs.malevolentshrine.mechanic.EntityAuraHandler;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.SoundCategory;
@@ -25,18 +25,23 @@ public class ShrineTickTask extends BukkitRunnable {
     private final CleaveSweepHandler cleaveHandler;
     private final EntityAuraHandler auraHandler;
     private final ShrineSession session;
+    private final SkillToggleManager toggleManager;
+    private final MessageManager messageManager;
     private int energyTickCounter;
     private int ambientTickCounter;
     private int ambientLoopSoundCooldown;
     private int ambientMoodSoundCooldown;
 
     public ShrineTickTask(ShrineManager manager, ShrineConfig config, CleaveSweepHandler cleaveHandler,
-                          EntityAuraHandler auraHandler, ShrineSession session) {
+                          EntityAuraHandler auraHandler, ShrineSession session, SkillToggleManager toggleManager,
+                          MessageManager messageManager) {
         this.manager = manager;
         this.config = config;
         this.cleaveHandler = cleaveHandler;
         this.auraHandler = auraHandler;
         this.session = session;
+        this.toggleManager = toggleManager;
+        this.messageManager = messageManager;
         this.energyTickCounter = 0;
         this.ambientTickCounter = 0;
         this.ambientLoopSoundCooldown = 0;
@@ -76,7 +81,7 @@ public class ShrineTickTask extends BukkitRunnable {
         if (energyTickCounter >= 20) {
             energyTickCounter = 0;
             if (!drainEnergy(caster)) {
-                caster.sendMessage(Component.text("Not enough energy! Shrine deactivated.", NamedTextColor.RED));
+                caster.sendMessage(messageManager.getMessage("no-energy"));
                 manager.deactivate(session.getPlayerId());
                 return;
             }
@@ -114,7 +119,9 @@ public class ShrineTickTask extends BukkitRunnable {
             }
         }
 
-        cleaveHandler.tick(session, config);
+        if (toggleManager.isSkillEnabled(session.getPlayerId(), "cleave")) {
+            cleaveHandler.tick(session, config);
+        }
     }
 
     private void updateBossBarViewers() {

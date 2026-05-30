@@ -1,9 +1,9 @@
 package dev.nguyendevs.malevolentshrine.command;
 
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
-import dev.nguyendevs.malevolentshrine.manager.ShrineManager;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import dev.nguyendevs.malevolentshrine.gui.ShrineGUI;
+import dev.nguyendevs.malevolentshrine.manager.MessageManager;
+import org.bukkit.Sound;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -15,64 +15,51 @@ import java.util.List;
 
 public class ShrineCommand implements CommandExecutor, TabCompleter {
     private final JavaPlugin plugin;
-    private final ShrineManager manager;
     private final ShrineConfig config;
+    private final ShrineGUI shrineGUI;
+    private final MessageManager messageManager;
 
-    public ShrineCommand(JavaPlugin plugin, ShrineManager manager, ShrineConfig config) {
+    public ShrineCommand(JavaPlugin plugin, ShrineConfig config, ShrineGUI shrineGUI, MessageManager messageManager) {
         this.plugin = plugin;
-        this.manager = manager;
         this.config = config;
+        this.shrineGUI = shrineGUI;
+        this.messageManager = messageManager;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /shrine <reload|activate|deactivate>", NamedTextColor.RED));
+        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("malevolentshrine.admin")) {
+                sender.sendMessage(messageManager.getMessage("no-permission"));
+                return true;
+            }
+            config.reload();
+            messageManager.reload();
+            sender.sendMessage(messageManager.getMessage("config-reloaded"));
             return true;
         }
 
-        switch (args[0].toLowerCase()) {
-            case "reload":
-                if (!sender.hasPermission("malevolentshrine.admin")) {
-                    sender.sendMessage(Component.text("You don't have permission!", NamedTextColor.RED));
-                    return true;
-                }
-                config.reload();
-                sender.sendMessage(Component.text("Config reloaded.", NamedTextColor.GREEN));
-                return true;
-
-            case "activate":
-                if (!sender.hasPermission("malevolentshrine.use")) {
-                    sender.sendMessage(Component.text("You don't have permission!", NamedTextColor.RED));
-                    return true;
-                }
-                if (!(sender instanceof Player player)) {
-                    sender.sendMessage(Component.text("Only players can use this.", NamedTextColor.RED));
-                    return true;
-                }
-                manager.activate(player);
-                return true;
-
-            case "deactivate":
-                if (!(sender instanceof Player player)) {
-                    sender.sendMessage(Component.text("Only players can use this.", NamedTextColor.RED));
-                    return true;
-                }
-                manager.deactivate(player.getUniqueId());
-                return true;
-
-            default:
-                sender.sendMessage(Component.text("Unknown subcommand. Use: reload, activate, deactivate", NamedTextColor.RED));
-                return true;
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(messageManager.getMessage("only-players"));
+            return true;
         }
+
+        if (!player.hasPermission("malevolentshrine.use")) {
+            player.sendMessage(messageManager.getMessage("no-permission"));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
+            return true;
+        }
+
+        shrineGUI.openGUI(player);
+        return true;
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) {
-            return List.of("reload", "activate", "deactivate").stream()
-                    .filter(s -> s.startsWith(args[0].toLowerCase()))
-                    .toList();
+        if (args.length == 1 && sender.hasPermission("malevolentshrine.admin")) {
+            if ("reload".startsWith(args[0].toLowerCase())) {
+                return List.of("reload");
+            }
         }
         return List.of();
     }

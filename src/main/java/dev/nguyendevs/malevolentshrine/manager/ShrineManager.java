@@ -7,12 +7,11 @@ import dev.nguyendevs.malevolentshrine.mechanic.EntityAuraHandler;
 import dev.nguyendevs.malevolentshrine.mechanic.TerrainDeformHandler;
 import dev.nguyendevs.malevolentshrine.task.ShrineTickTask;
 import dev.nguyendevs.malevolentshrine.util.ParticleUtil;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -32,12 +31,17 @@ public class ShrineManager {
     private final CleaveSweepHandler cleaveHandler;
     private final EntityAuraHandler auraHandler;
     private final TerrainDeformHandler terrainHandler;
+    private final SkillToggleManager toggleManager;
+    private final MessageManager messageManager;
     private final Map<UUID, ShrineSession> activeSessions = new ConcurrentHashMap<>();
     private WorldGuardHandler worldGuardHandler;
 
-    public ShrineManager(JavaPlugin plugin, ShrineConfig config) {
+    public ShrineManager(JavaPlugin plugin, ShrineConfig config, SkillToggleManager toggleManager,
+                         MessageManager messageManager) {
         this.plugin = plugin;
         this.config = config;
+        this.toggleManager = toggleManager;
+        this.messageManager = messageManager;
         this.cleaveHandler = new CleaveSweepHandler(plugin);
         this.auraHandler = new EntityAuraHandler();
         this.terrainHandler = new TerrainDeformHandler(plugin);
@@ -50,21 +54,37 @@ public class ShrineManager {
         }
     }
 
-    public boolean activate(Player caster) {
+    public void activateSkill(Player player, String skill) {
+        if (!toggleManager.isSkillEnabled(player.getUniqueId(), skill)) return;
+        if (!player.hasPermission("malevolentshrine.use." + skill)) {
+            player.sendMessage(messageManager.getMessage("no-permission-skill"));
+            return;
+        }
+
+        switch (skill) {
+            case "domain-expansion" -> activateDomain(player);
+            case "cleave" -> executeStandaloneCleave(player);
+            case "dismantle" -> executeStandaloneDismantle(player);
+            case "rct" -> executeRCT(player);
+            case "divine-flame" -> executeDivineFlame(player);
+        }
+    }
+
+    private void activateDomain(Player caster) {
         if (activeSessions.containsKey(caster.getUniqueId())) {
-            caster.sendMessage(Component.text("Shrine already active!", NamedTextColor.RED));
-            return false;
+            caster.sendMessage(messageManager.getMessage("domain-already-active"));
+            return;
         }
 
         if (config.getDisabledWorlds().stream().anyMatch(w -> w.equalsIgnoreCase(caster.getWorld().getName()))) {
-            caster.sendMessage(Component.text("Shrine cannot be used in this world!", NamedTextColor.RED));
-            return false;
+            caster.sendMessage(messageManager.getMessage("world-disabled"));
+            return;
         }
 
         if (worldGuardHandler != null) {
             if (!worldGuardHandler.isAllowed(caster)) {
-                caster.sendMessage(Component.text("Shrine is not allowed in this area!", NamedTextColor.RED));
-                return false;
+                caster.sendMessage(messageManager.getMessage("area-not-allowed"));
+                return;
             }
         }
 
@@ -74,8 +94,8 @@ public class ShrineManager {
 
         if (worldGuardHandler != null && WorldGuardHandler.isLocationProtected(
                 center.getWorld(), center.getBlockX(), center.getBlockY(), center.getBlockZ())) {
-            caster.sendMessage(Component.text("This area is protected! Shrine cannot be activated here!", NamedTextColor.RED));
-            return false;
+            caster.sendMessage(messageManager.getMessage("area-protected"));
+            return;
         }
 
         ShrineSession session = new ShrineSession(
@@ -117,7 +137,9 @@ public class ShrineManager {
         teleportLoc.setY(schemY + 0.5);
         caster.teleport(teleportLoc);
 
-        terrainHandler.apply(session, config);
+        if (toggleManager.isSkillEnabled(caster.getUniqueId(), "dismantle")) {
+            terrainHandler.apply(session, config);
+        }
 
         applyDarkness(center, radius, caster);
 
@@ -130,7 +152,7 @@ public class ShrineManager {
             center.getWorld().playSound(center, Sound.BLOCK_BEACON_ACTIVATE, SoundCategory.AMBIENT, 1.5f, 0.3f);
         }
 
-        ShrineTickTask task = new ShrineTickTask(this, config, cleaveHandler, auraHandler, session);
+        ShrineTickTask task = new ShrineTickTask(this, config, cleaveHandler, auraHandler, session, toggleManager, messageManager);
         int taskId = task.runTaskTimer(plugin, 0, 1).getTaskId();
         session.setTaskId(taskId);
 
@@ -142,8 +164,7 @@ public class ShrineManager {
         session.getBossBar().addPlayer(caster);
         session.getBossBarViewers().add(caster.getUniqueId());
 
-        caster.sendMessage(Component.text("Malevolent Shrine activated!", NamedTextColor.DARK_RED));
-        return true;
+        caster.sendMessage(messageManager.getMessage("domain-activated"));
     }
 
     public void deactivate(UUID playerId) {
@@ -196,8 +217,77 @@ public class ShrineManager {
 
         Player player = plugin.getServer().getPlayer(playerId);
         if (player != null && player.isOnline()) {
-            player.sendMessage(Component.text("Malevolent Shrine deactivated.", NamedTextColor.GRAY));
+            player.sendMessage(messageManager.getMessage("domain-deactivated"));
         }
+    }
+
+    private void executeStandaloneCleave(Player player) {
+        Location center = player.getLocation();
+        double radius = config.getDefaultRadius();
+        double radiusSq = radius * radius;
+        double damage = config.getCleaveDamage();
+
+        for (Entity entity : center.getWorld().getNearbyEntities(center, radius, radius, radius)) {
+            if (entity instanceof LivingEntity le && !entity.getUniqueId().equals(player.getUniqueId()) && !le.isDead()) {
+                if (entity.getLocation().distanceSquared(center) <= radiusSq) {
+                    if (worldGuardHandler != null && WorldGuardHandler.isEntityProtected(entity)) continue;
+                    le.damage(damage, player);
+                    if (config.isCleaveParticles()) {
+                        ParticleUtil.spawnCleaveHit(le.getEyeLocation());
+                    }
+                    if (config.isCleaveSounds()) {
+                        le.getWorld().playSound(le.getEyeLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP,
+                                SoundCategory.PLAYERS, 1.0f, 0.7f);
+                    }
+                }
+            }
+        }
+
+        player.sendMessage(messageManager.getMessage("cleave-activated"));
+    }
+
+    private void executeStandaloneDismantle(Player player) {
+        Location center = player.getLocation();
+        double radius = config.getDefaultRadius();
+
+        if (config.isDismantleSounds()) {
+            center.getWorld().playSound(center, Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, SoundCategory.BLOCKS, 0.6f, 0.3f);
+        }
+
+        if (config.isDismantleParticles()) {
+            ParticleUtil.spawnActivationDome(center, radius);
+        }
+
+        player.sendMessage(messageManager.getMessage("dismantle-activated"));
+    }
+
+    private void executeRCT(Player player) {
+        double healAmount = config.getCasterRegenAmplifier() > 0 ? 8.0 : 4.0;
+        double maxHealth = player.getMaxHealth();
+        double newHealth = Math.min(maxHealth, player.getHealth() + healAmount);
+        player.setHealth(newHealth);
+
+        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1, false, false, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 200, 0, false, false, true));
+
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WITCH_DRINK, SoundCategory.PLAYERS, 1.0f, 1.0f);
+        if (config.isCleaveParticles()) {
+            ParticleUtil.spawnCleaveHit(player.getEyeLocation());
+        }
+
+        player.sendMessage(messageManager.getMessage("rct-activated"));
+    }
+
+    private void executeDivineFlame(Player player) {
+        Location target = player.getTargetBlockExact(50) != null
+                ? player.getTargetBlockExact(50).getLocation().add(0.5, 1, 0.5)
+                : player.getLocation().add(player.getLocation().getDirection().multiply(30));
+
+        player.getWorld().createExplosion(target, 4.0f, false, true, player);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_GHAST_SHOOT, SoundCategory.PLAYERS, 1.0f, 0.5f);
+        player.getWorld().playSound(target, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.BLOCKS, 2.0f, 0.5f);
+
+        player.sendMessage(messageManager.getMessage("divine-flame-activated"));
     }
 
     public boolean isActive(UUID playerId) {
@@ -222,4 +312,5 @@ public class ShrineManager {
     public CleaveSweepHandler getCleaveHandler() { return cleaveHandler; }
     public EntityAuraHandler getAuraHandler() { return auraHandler; }
     public TerrainDeformHandler getTerrainHandler() { return terrainHandler; }
+    public SkillToggleManager getToggleManager() { return toggleManager; }
 }

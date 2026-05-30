@@ -1,0 +1,69 @@
+gui-title: "&8Malevolent Shrine"
+gui-size: 9
+
+items:
+  domain-expansion:
+    slot: 0
+    material: END_CRYSTAL
+    name: "&4Domain Expansion"
+    lore:
+      - "&7Unleash your domain,"
+      - "&7trapping all within."
+      - ""
+      - "&7Status: %status%"
+      - ""
+      - "&e&oClick to toggle"
+
+  cleave:
+    slot: 2
+    material: IRON_SWORD
+    name: "&cCleave"
+    lore:
+      - "&7Automatic slashing"
+      - "&7attack that targets"
+      - "&7all within the domain."
+      - ""
+      - "&7Status: %status%"
+      - ""
+      - "&e&oClick to toggle"
+
+  dismantle:
+    slot: 4
+    material: DIAMOND_PICKAXE
+    name: "&7Dismantle"
+    lore:
+      - "&7Deforms terrain in a"
+      - "&7checkerboard pattern."
+      - ""
+      - "&7Status: %status%"
+      - ""
+      - "&e&oClick to toggle"
+
+  rct:
+    slot: 6
+    material: GHAST_TEAR
+    name: "&aReverse Cursed Technique"
+    lore:
+      - "&7Positive energy that"
+      - "&7heals wounds and"
+      - "&7regenerates health."
+      - ""
+      - "&7Status: %status%"
+      - ""
+      - "&e&oClick to toggle"
+
+  divine-flame:
+    slot: 8
+    material: BLAZE_POWDER
+    name: "&6Divine Flame"
+    lore:
+      - "&7Unleash a powerful"
+      - "&7flame that incinerates"
+      - "&7everything in its path."
+      - ""
+      - "&7Status: %status%"
+      - ""
+      - "&e&oClick to toggle"
+
+status-enabled: "&aEnabled"
+status-disabled: "&cDisabled"
