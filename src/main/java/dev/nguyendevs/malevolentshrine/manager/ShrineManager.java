@@ -44,6 +44,8 @@ public class ShrineManager {
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
             try {
                 this.worldGuardHandler = new WorldGuardHandler();
+                Bukkit.getConsoleSender().sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                        "&8[&4Malevolent Shrine&8] &aSuccessfully hooked into WorldGuard"));
             } catch (Throwable ignored) {}
         }
     }
@@ -87,6 +89,16 @@ public class ShrineManager {
 
         session.setSchematicBounds(schemOx, schemMinY, schemOz,
                 schemOx + 42, schemMinY + 53, schemOz + 44);
+
+        if (worldGuardHandler != null) {
+            String regionId = "malevolent_shrine_" + caster.getUniqueId();
+            WorldGuardHandler.createShrineRegion(
+                    center.getWorld(), regionId,
+                    schemOx, schemMinY, schemOz,
+                    schemOx + 42, schemMinY + 53, schemOz + 44
+            );
+            session.setWgRegionId(regionId);
+        }
 
         int schemTaskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             ShrineSchematic.paste(center.getWorld(), schemOx, schemMinY, schemOz);
@@ -162,6 +174,13 @@ public class ShrineManager {
         if (config.isDeactivationSounds()) {
             center.getWorld().playSound(center, Sound.BLOCK_BEACON_DEACTIVATE, SoundCategory.AMBIENT, 1.5f, 0.8f);
             center.getWorld().playSound(center, Sound.ENTITY_ENDERMAN_TELEPORT, SoundCategory.AMBIENT, 1.0f, 0.5f);
+        }
+
+        if (worldGuardHandler != null) {
+            String regionId = session.getWgRegionId();
+            if (regionId != null) {
+                WorldGuardHandler.removeShrineRegion(center.getWorld(), regionId);
+            }
         }
 
         terrainHandler.restore(session, config);

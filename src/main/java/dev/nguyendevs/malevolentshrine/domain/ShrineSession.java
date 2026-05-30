@@ -29,6 +29,7 @@ public class ShrineSession {
     private int schemMinX, schemMinY, schemMinZ;
     private int schemMaxX, schemMaxY, schemMaxZ;
     private boolean hasSchematicBounds;
+    private String wgRegionId;
     private final BossBar bossBar;
     private final Set<UUID> bossBarViewers;
 
@@ -95,4 +96,7 @@ public class ShrineSession {
                 && y >= schemMinY && y <= schemMaxY
                 && z >= schemMinZ && z <= schemMaxZ;
     }
+
+    public String getWgRegionId() { return wgRegionId; }
+    public void setWgRegionId(String wgRegionId) { this.wgRegionId = wgRegionId; }
 }

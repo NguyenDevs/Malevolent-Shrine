@@ -30,13 +30,6 @@ public final class MalevolentShrinePlugin extends JavaPlugin {
         this.shrineConfig = new ShrineConfig(this);
         this.manager = new ShrineManager(this, shrineConfig);
 
-        String schemName = shrineConfig.getSchematicFileName() + ".schem";
-        if (getResource(schemName) != null) {
-            saveResource(schemName, false);
-        } else {
-            getLogger().warning("No " + schemName + " found in plugin resources. Schematic paste will be skipped.");
-        }
-
         ShrineCommand command = new ShrineCommand(this, manager, shrineConfig);
         var cmd = getCommand("shrine");
         if (cmd != null) {
