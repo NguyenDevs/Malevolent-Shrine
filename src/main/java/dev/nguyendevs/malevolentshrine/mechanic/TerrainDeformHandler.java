@@ -1,5 +1,9 @@
 package dev.nguyendevs.malevolentshrine.mechanic;
 
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.events.PacketContainer;
+import com.comphenix.protocol.wrappers.WrappedBlockData;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.util.BlockPatternGenerator;
@@ -45,7 +49,7 @@ public class TerrainDeformHandler {
 
         Set<Long> roots = BlockPatternGenerator.generateRoots(cx, cz, radius);
 
-        Map<Location, BlockData> packetChanges = new HashMap<>();
+        Map<Long, Map<Short, WrappedBlockData>> sectionBundles = new HashMap<>();
 
         int minY = Math.max(world.getMinHeight(), cy - radius);
         int maxYBlock = Math.min(world.getMaxHeight() - 1, cy + radius);
@@ -96,14 +100,20 @@ public class TerrainDeformHandler {
                                 replacement = ThreadLocalRandom.current().nextBoolean() ? Material.SOUL_SAND : Material.SOUL_SOIL;
                             }
 
-                            packetChanges.put(new Location(world, wx, wy, wz), replacement.createBlockData());
+                            int sectionY = wy >> 4;
+                            long sectionKey = ((long) chunkX << 42) | ((long) chunkZ << 20) | (long) sectionY;
+                            short posInSection = (short) ((lx << 8) | (lz << 4) | (wy & 0xF));
+
+                            sectionBundles
+                                    .computeIfAbsent(sectionKey, k -> new HashMap<>())
+                                    .put(posInSection, WrappedBlockData.createData(replacement));
                         }
                     }
                 }
             }
         }
 
-        sendChanges(world, packetChanges);
+        sendSectionPackets(world, sectionBundles);
     }
 
     private void applyDismantle(ShrineSession session, ShrineConfig config) {
@@ -210,24 +220,82 @@ public class TerrainDeformHandler {
 
         FastAsyncHandler.restoreBlocks(world, session.getOriginalDismantleBlocks());
 
-        Map<Location, BlockData> restoreChanges = new HashMap<>();
+        Map<Long, Map<Short, WrappedBlockData>> restoreBundles = new HashMap<>();
         for (Map.Entry<Long, BlockData> entry : session.getOriginalSurfaceBlocks().entrySet()) {
             long packed = entry.getKey();
             int x = (int) (packed >> 38);
             int z = (int) ((packed >> 12) & 0x3FFFFFFF);
             int y = (int) ((packed & 0xFFF) - Y_OFFSET);
-            restoreChanges.put(new Location(world, x, y, z), entry.getValue());
+            int chunkX = x >> 4;
+            int chunkZ = z >> 4;
+            int sectionY = y >> 4;
+            long sectionKey = ((long) chunkX << 42) | ((long) chunkZ << 20) | (long) sectionY;
+            short posInSection = (short) (((x & 0xF) << 8) | ((z & 0xF) << 4) | (y & 0xF));
+
+            restoreBundles
+                    .computeIfAbsent(sectionKey, k -> new HashMap<>())
+                    .put(posInSection, WrappedBlockData.createData(entry.getValue()));
         }
 
-        sendChanges(world, restoreChanges);
+        sendSectionPackets(world, restoreBundles);
     }
 
-    private void sendChanges(World world, Map<Location, BlockData> changes) {
-        if (changes.isEmpty()) return;
-        for (Player player : world.getPlayers()) {
-            try {
-                player.sendMultiBlockChange(changes);
-            } catch (Exception ignored) {}
+    private void sendSectionPackets(World world, Map<Long, Map<Short, WrappedBlockData>> sectionBundles) {
+        if (sectionBundles.isEmpty()) return;
+
+        List<Player> players = world.getPlayers();
+        if (players.isEmpty()) return;
+
+        boolean useProtocolLib = true;
+        for (Map.Entry<Long, Map<Short, WrappedBlockData>> entry : sectionBundles.entrySet()) {
+            long sectionKey = entry.getKey();
+            Map<Short, WrappedBlockData> changes = entry.getValue();
+            if (changes.isEmpty()) continue;
+
+            short[] positions = new short[changes.size()];
+            WrappedBlockData[] blockData = new WrappedBlockData[changes.size()];
+            int idx = 0;
+            for (Map.Entry<Short, WrappedBlockData> change : changes.entrySet()) {
+                positions[idx] = change.getKey();
+                blockData[idx] = change.getValue();
+                idx++;
+            }
+
+            if (useProtocolLib) {
+                try {
+                    PacketContainer packet = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
+                    packet.getLongs().write(0, sectionKey);
+                    packet.getShortArrays().write(0, positions);
+                    packet.getBlockDataArrays().write(0, blockData);
+
+                    for (Player player : players) {
+                        ProtocolLibrary.getProtocolManager().sendServerPacket(player, packet.deepClone());
+                    }
+                    continue;
+                } catch (Exception e) {
+                    useProtocolLib = false;
+                }
+            }
+
+            Map<Location, BlockData> fallback = new HashMap<>();
+            for (int i = 0; i < positions.length; i++) {
+                short pos = positions[i];
+                int chunkX = (int) (sectionKey >> 42);
+                int chunkZ = (int) ((sectionKey >> 20) & 0x3FFFFFL);
+                int sectionY = (int) (sectionKey & 0xFFFFF);
+                int lx = (pos >> 8) & 0xF;
+                int lz = (pos >> 4) & 0xF;
+                int ly = pos & 0xF;
+                int wx = (chunkX << 4) | lx;
+                int wz = (chunkZ << 4) | lz;
+                int wy = (sectionY << 4) | ly;
+                fallback.put(new Location(world, wx, wy, wz), blockData[i].getType().createBlockData());
+            }
+            for (Player player : players) {
+                try {
+                    player.sendMultiBlockChange(fallback);
+                } catch (Exception ignored) {}
+            }
         }
     }
 
