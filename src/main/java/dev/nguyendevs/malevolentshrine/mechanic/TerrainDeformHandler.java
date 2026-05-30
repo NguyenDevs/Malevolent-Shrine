@@ -64,6 +64,7 @@ public class TerrainDeformHandler {
 
         BlockData soulSand = Material.SOUL_SAND.createBlockData();
         BlockData soulSoil = Material.SOUL_SOIL.createBlockData();
+        BlockData air = Material.AIR.createBlockData();
 
         for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
@@ -93,20 +94,25 @@ public class TerrainDeformHandler {
                             int dy = wy - cy;
                             if (dxSq + dz * dz + dy * dy > radiusSq) continue;
 
-                            if (snap.getBlockType(lx, wy, lz).isEmpty()) continue;
+                            Material mat = snap.getBlockType(lx, wy, lz);
+                            if (mat.isEmpty()) continue;
 
                             BlockPos bp = new BlockPos(wx, wy, wz, snap.getBlockData(lx, wy, lz));
                             if (surfaceBlocks.contains(bp)) continue;
-                            surfaceBlocks.add(bp);
 
-                            BlockData replacement;
-                            if (roots.contains(BlockPatternGenerator.pack(wx, wz))) {
-                                replacement = ROOT_BLOCKS[rng.nextInt(ROOT_BLOCKS.length)].createBlockData();
-                            } else {
-                                replacement = rng.nextBoolean() ? soulSand : soulSoil;
+                            if (isVegetation(mat)) {
+                                surfaceBlocks.add(bp);
+                                edits.add(new BlockEdit(wx, wy, wz, air));
+                            } else if (mat.isSolid() && isExposed(world, wx, wy, wz)) {
+                                surfaceBlocks.add(bp);
+                                BlockData replacement;
+                                if (roots.contains(BlockPatternGenerator.pack(wx, wz))) {
+                                    replacement = ROOT_BLOCKS[rng.nextInt(ROOT_BLOCKS.length)].createBlockData();
+                                } else {
+                                    replacement = rng.nextBoolean() ? soulSand : soulSoil;
+                                }
+                                edits.add(new BlockEdit(wx, wy, wz, replacement));
                             }
-                            edits.add(new BlockEdit(wx, wy, wz, replacement));
-                            break;
                         }
                     }
                 }
@@ -247,29 +253,44 @@ public class TerrainDeformHandler {
         World world = session.getCenter().getWorld();
         if (world == null) return;
 
-        if (!session.getOriginalSurfaceBlocks().isEmpty()) {
-            List<BlockEdit> edits = new ArrayList<>();
-            for (BlockPos bp : session.getOriginalSurfaceBlocks()) {
-                edits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
-            }
-            scheduleEdits(world, edits, config);
+        List<BlockEdit> allEdits = new ArrayList<>();
+        for (BlockPos bp : session.getOriginalSurfaceBlocks()) {
+            allEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+        }
+        for (BlockPos bp : session.getOriginalDismantleBlocks()) {
+            allEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+        }
+        for (BlockPos bp : session.getSchematicOriginalBlocks()) {
+            allEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
         }
 
-        if (!session.getOriginalDismantleBlocks().isEmpty()) {
-            List<BlockEdit> edits = new ArrayList<>();
-            for (BlockPos bp : session.getOriginalDismantleBlocks()) {
-                edits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
-            }
-            scheduleEdits(world, edits, config);
-        }
+        int cx = session.getCenter().getBlockX();
+        int cy = session.getCenter().getBlockY();
+        int cz = session.getCenter().getBlockZ();
+        allEdits.sort(Comparator.comparingDouble(e ->
+                -Math.sqrt(Math.pow(e.x - cx, 2) + Math.pow(e.y - cy, 2) + Math.pow(e.z - cz, 2))));
 
-        if (!session.getSchematicOriginalBlocks().isEmpty()) {
-            List<BlockEdit> edits = new ArrayList<>();
-            for (BlockPos bp : session.getSchematicOriginalBlocks()) {
-                edits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
-            }
-            scheduleEdits(world, edits, config);
-        }
+        scheduleEdits(world, allEdits, config);
+    }
+
+    private static boolean isVegetation(Material mat) {
+        if (mat.isAir()) return false;
+        if (!mat.isSolid()) return true;
+        return mat.name().endsWith("_LEAVES");
+    }
+
+    private boolean isExposed(World world, int x, int y, int z) {
+        return isReplaceable(world, x + 1, y, z) ||
+               isReplaceable(world, x - 1, y, z) ||
+               isReplaceable(world, x, y + 1, z) ||
+               isReplaceable(world, x, y - 1, z) ||
+               isReplaceable(world, x, y, z + 1) ||
+               isReplaceable(world, x, y, z - 1);
+    }
+
+    private boolean isReplaceable(World world, int x, int y, int z) {
+        Material mat = world.getBlockData(x, y, z).getMaterial();
+        return mat.isAir() || isVegetation(mat);
     }
 
     private static class BlockEdit {
