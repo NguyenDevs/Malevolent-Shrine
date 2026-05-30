@@ -102,7 +102,7 @@ public class ShrineManager {
 
         terrainHandler.apply(session, config);
 
-        applyDarkness(center, radius);
+        applyDarkness(center, radius, caster);
 
         if (config.isActivationParticles()) {
             ParticleUtil.spawnActivationDome(center, radius);
@@ -186,11 +186,11 @@ public class ShrineManager {
         }
     }
 
-    private void applyDarkness(Location center, double radius) {
-        double radiusSq = radius * radius;
+    private void applyDarkness(Location center, double radius, Player caster) {
         for (LivingEntity entity : center.getNearbyLivingEntities(radius)) {
-            if (entity instanceof Player) {
-                entity.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 200, 0, false, false, true));
+            if (entity instanceof Player p) {
+                int duration = p.equals(caster) ? 100 : 200;
+                p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, duration, 0, false, false, true));
             }
         }
     }
