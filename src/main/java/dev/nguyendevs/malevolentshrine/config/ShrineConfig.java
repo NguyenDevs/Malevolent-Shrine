@@ -20,7 +20,7 @@ public class ShrineConfig {
     private int casterResistanceAmplifier;
     private int casterRegenAmplifier;
     private int casterRegenIntervalTicks;
-    private double cleaveDamagePercent;
+    private double cleaveDamagePerSecond;
     private int cleaveIntervalMinTicks;
     private int cleaveIntervalMaxTicks;
     private int dismantleChunkSize;
@@ -66,7 +66,7 @@ public class ShrineConfig {
         casterRegenIntervalTicks = effects.getInt("caster-regen-interval-ticks", 100);
 
         ConfigurationSection cleave = plugin.getConfig().getConfigurationSection("cleave");
-        cleaveDamagePercent = cleave.getDouble("damage-percent", 0.75);
+        cleaveDamagePerSecond = cleave.getDouble("damage-per-second", 4.0);
         cleaveIntervalMinTicks = cleave.getInt("interval-min-ticks", 10);
         cleaveIntervalMaxTicks = cleave.getInt("interval-max-ticks", 30);
 
@@ -109,7 +109,7 @@ public class ShrineConfig {
     public int getCasterResistanceAmplifier() { return casterResistanceAmplifier; }
     public int getCasterRegenAmplifier() { return casterRegenAmplifier; }
     public int getCasterRegenIntervalTicks() { return casterRegenIntervalTicks; }
-    public double getCleaveDamagePercent() { return cleaveDamagePercent; }
+    public double getCleaveDamagePerSecond() { return cleaveDamagePerSecond; }
     public int getCleaveIntervalMinTicks() { return cleaveIntervalMinTicks; }
     public int getCleaveIntervalMaxTicks() { return cleaveIntervalMaxTicks; }
     public int getDismantleChunkSize() { return dismantleChunkSize; }

@@ -33,15 +33,15 @@ public class CleaveSweepHandler {
 
         if (counter >= interval) {
             session.setCleaveTickCounter(0);
-            session.setCleaveNextInterval(
-                    ThreadLocalRandom.current().nextInt(config.getCleaveIntervalMinTicks(), config.getCleaveIntervalMaxTicks() + 1));
-            executeCleave(session, config);
+            int nextInterval = ThreadLocalRandom.current().nextInt(config.getCleaveIntervalMinTicks(), config.getCleaveIntervalMaxTicks() + 1);
+            session.setCleaveNextInterval(nextInterval);
+            executeCleave(session, config, interval);
         } else {
             session.setCleaveTickCounter(counter);
         }
     }
 
-    private void executeCleave(ShrineSession session, ShrineConfig config) {
+    private void executeCleave(ShrineSession session, ShrineConfig config, int intervalTicks) {
         Location center = session.getCenter();
         double radius = session.getRadius();
         double radiusSq = radius * radius;
@@ -61,7 +61,8 @@ public class CleaveSweepHandler {
                 a.getLocation().distanceSquared(center),
                 b.getLocation().distanceSquared(center)));
 
-        double damagePercent = config.getCleaveDamagePercent();
+        double damagePerSecond = config.getCleaveDamagePerSecond();
+        double damage = damagePerSecond * intervalTicks / 20.0;
         boolean doParticles = config.isCleaveParticles();
         boolean doSounds = config.isCleaveSounds();
 
@@ -70,6 +71,7 @@ public class CleaveSweepHandler {
             final int from = batchStart;
             final int to = Math.min(batchStart + batchSize, targets.size());
             int delay = batchStart / batchSize;
+            final double dmg = damage;
 
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 for (int i = from; i < to; i++) {
@@ -77,10 +79,10 @@ public class CleaveSweepHandler {
                     if (target.isDead()) continue;
 
                     double currentHealth = target.getHealth();
-                    double damage = Math.max(0, currentHealth * damagePercent);
-                    if (damage <= 0) continue;
+                    double finalDmg = Math.min(dmg, currentHealth - 0.01);
+                    if (finalDmg <= 0) continue;
 
-                    target.setHealth(Math.max(0.0, currentHealth - damage));
+                    target.damage(finalDmg);
 
                     Location loc = target.getEyeLocation();
                     if (doParticles) {

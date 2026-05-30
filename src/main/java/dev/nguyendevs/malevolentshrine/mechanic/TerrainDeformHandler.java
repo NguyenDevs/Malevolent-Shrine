@@ -1,9 +1,5 @@
 package dev.nguyendevs.malevolentshrine.mechanic;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.wrappers.WrappedBlockData;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.util.BlockPatternGenerator;
@@ -49,7 +45,7 @@ public class TerrainDeformHandler {
 
         Set<Long> roots = BlockPatternGenerator.generateRoots(cx, cz, radius);
 
-        Map<Long, Map<Short, WrappedBlockData>> sectionBundles = new HashMap<>();
+        Map<Location, BlockData> packetChanges = new HashMap<>();
 
         int minY = Math.max(world.getMinHeight(), cy - radius);
         int maxYBlock = Math.min(world.getMaxHeight() - 1, cy + radius);
@@ -93,27 +89,21 @@ public class TerrainDeformHandler {
 
                             Material replacement;
                             if (roots.contains(BlockPatternGenerator.pack(wx, wz))) {
-                replacement = ThreadLocalRandom.current().nextDouble() < LAVA_CHANCE
-                        ? Material.LAVA
-                        : pickRootBlock(ThreadLocalRandom.current());
+                                replacement = ThreadLocalRandom.current().nextDouble() < LAVA_CHANCE
+                                        ? Material.LAVA
+                                        : pickRootBlock(ThreadLocalRandom.current());
                             } else {
                                 replacement = ThreadLocalRandom.current().nextBoolean() ? Material.SOUL_SAND : Material.SOUL_SOIL;
                             }
 
-                            int sectionY = wy >> 4;
-                            long sectionKey = ((long) chunkX << 42) | ((long) chunkZ << 20) | (long) sectionY;
-                            short posInSection = (short) ((lx << 8) | (lz << 4) | (wy & 0xF));
-
-                            sectionBundles
-                                    .computeIfAbsent(sectionKey, k -> new HashMap<>())
-                                    .put(posInSection, WrappedBlockData.createData(replacement));
+                            packetChanges.put(new Location(world, wx, wy, wz), replacement.createBlockData());
                         }
                     }
                 }
             }
         }
 
-        sendSectionPackets(world, sectionBundles);
+        sendChanges(world, packetChanges);
     }
 
     private void applyDismantle(ShrineSession session, ShrineConfig config) {
@@ -220,69 +210,24 @@ public class TerrainDeformHandler {
 
         FastAsyncHandler.restoreBlocks(world, session.getOriginalDismantleBlocks());
 
-        Map<Long, Map<Short, WrappedBlockData>> restoreBundles = new HashMap<>();
-        Map<Integer, List<Player>> chunkPlayers = new HashMap<>();
-
-        for (Player player : world.getPlayers()) {
-            int pcx = player.getLocation().getBlockX() >> 4;
-            int pcz = player.getLocation().getBlockZ() >> 4;
-            int viewDist = 10;
-            for (int dx = -viewDist; dx <= viewDist; dx++) {
-                for (int dz = -viewDist; dz <= viewDist; dz++) {
-                    int key = (pcx + dx) << 16 | (pcz + dz) & 0xFFFF;
-                    chunkPlayers.computeIfAbsent(key, k -> new ArrayList<>()).add(player);
-                }
-            }
-        }
-
+        Map<Location, BlockData> restoreChanges = new HashMap<>();
         for (Map.Entry<Long, BlockData> entry : session.getOriginalSurfaceBlocks().entrySet()) {
             long packed = entry.getKey();
             int x = (int) (packed >> 38);
             int z = (int) ((packed >> 12) & 0x3FFFFFFF);
             int y = (int) ((packed & 0xFFF) - Y_OFFSET);
-            int chunkX = x >> 4;
-            int chunkZ = z >> 4;
-            int sectionY = y >> 4;
-            long sectionKey = ((long) chunkX << 42) | ((long) chunkZ << 20) | (long) sectionY;
-            short posInSection = (short) (((x & 0xF) << 8) | ((z & 0xF) << 4) | (y & 0xF));
-
-            restoreBundles
-                    .computeIfAbsent(sectionKey, k -> new HashMap<>())
-                    .put(posInSection, WrappedBlockData.createData(entry.getValue()));
+            restoreChanges.put(new Location(world, x, y, z), entry.getValue());
         }
 
-        for (Map.Entry<Long, Map<Short, WrappedBlockData>> entry : restoreBundles.entrySet()) {
-            long sectionKey = entry.getKey();
-            Map<Short, WrappedBlockData> changes = entry.getValue();
-            if (changes.isEmpty()) continue;
+        sendChanges(world, restoreChanges);
+    }
 
-            int chunkX = (int) (sectionKey >> 42);
-            int chunkZ = (int) ((sectionKey >> 20) & 0x3FFFFFL);
-
-            int chunkPlayerKey = chunkX << 16 | chunkZ & 0xFFFF;
-            List<Player> nearbyPlayers = chunkPlayers.get(chunkPlayerKey);
-            if (nearbyPlayers == null || nearbyPlayers.isEmpty()) continue;
-
-            PacketContainer packet = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
-            packet.getLongs().write(0, sectionKey);
-
-            short[] positions = new short[changes.size()];
-            WrappedBlockData[] blockData = new WrappedBlockData[changes.size()];
-            int idx = 0;
-            for (Map.Entry<Short, WrappedBlockData> change : changes.entrySet()) {
-                positions[idx] = change.getKey();
-                blockData[idx] = change.getValue();
-                idx++;
-            }
-
-            packet.getShortArrays().write(0, positions);
-            packet.getBlockDataArrays().write(0, blockData);
-
-            for (Player player : nearbyPlayers) {
-                try {
-                    ProtocolLibrary.getProtocolManager().sendServerPacket(player, packet);
-                } catch (Exception ignored) {}
-            }
+    private void sendChanges(World world, Map<Location, BlockData> changes) {
+        if (changes.isEmpty()) return;
+        for (Player player : world.getPlayers()) {
+            try {
+                player.sendMultiBlockChange(changes);
+            } catch (Exception ignored) {}
         }
     }
 
@@ -293,39 +238,5 @@ public class TerrainDeformHandler {
 
     private static Material pickRootBlock(ThreadLocalRandom rng) {
         return ROOT_BLOCKS[rng.nextInt(ROOT_BLOCKS.length)];
-    }
-
-    private void sendSectionPackets(World world, Map<Long, Map<Short, WrappedBlockData>> sectionBundles) {
-        if (sectionBundles.isEmpty()) return;
-
-        List<Player> players = world.getPlayers();
-        if (players.isEmpty()) return;
-
-        for (Map.Entry<Long, Map<Short, WrappedBlockData>> entry : sectionBundles.entrySet()) {
-            long sectionKey = entry.getKey();
-            Map<Short, WrappedBlockData> changes = entry.getValue();
-            if (changes.isEmpty()) continue;
-
-            PacketContainer packet = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
-            packet.getLongs().write(0, sectionKey);
-
-            short[] positions = new short[changes.size()];
-            WrappedBlockData[] blockData = new WrappedBlockData[changes.size()];
-            int idx = 0;
-            for (Map.Entry<Short, WrappedBlockData> change : changes.entrySet()) {
-                positions[idx] = change.getKey();
-                blockData[idx] = change.getValue();
-                idx++;
-            }
-
-            packet.getShortArrays().write(0, positions);
-            packet.getBlockDataArrays().write(0, blockData);
-
-            for (Player player : players) {
-                try {
-                    ProtocolLibrary.getProtocolManager().sendServerPacket(player, packet);
-                } catch (Exception ignored) {}
-            }
-        }
     }
 }

@@ -14,7 +14,7 @@ effects:
   caster-regen-interval-ticks: 100
 
 cleave:
-  damage-percent: 0.75
+  damage-per-second: 4.0
   interval-min-ticks: 10
   interval-max-ticks: 30
 
