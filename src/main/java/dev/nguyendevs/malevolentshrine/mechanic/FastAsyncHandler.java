@@ -83,10 +83,8 @@ public class FastAsyncHandler {
                     int cz = z >> 4;
 
                     if (cx != chunkX || cz != chunkZ) {
-                        if (cz > 30000000 || cz < -30000000 || cx > 30000000 || cx < -30000000) {
-                            if (debug) {
-                                plugin.getLogger().warning("[ShrineDebug] Skipping out-of-bounds chunk [" + cx + ", " + cz + "] at block " + x + "," + y + "," + z);
-                            }
+                        if (cz > 2000000 || cz < -2000000 || cx > 2000000 || cx < -2000000) {
+                            plugin.getLogger().warning("[Shrine] Skipping out-of-bounds chunk [" + cx + ", " + cz + "] at block " + x + "," + y + "," + z + " (packed=" + coord[0] + ")");
                             chunkX = cx;
                             chunkZ = cz;
                             chunk = null;
@@ -154,10 +152,8 @@ public class FastAsyncHandler {
                     int cz = z >> 4;
 
                     if (cx != chunkX || cz != chunkZ) {
-                        if (cz > 30000000 || cz < -30000000 || cx > 30000000 || cx < -30000000) {
-                            if (debug) {
-                                plugin.getLogger().warning("[ShrineDebug] Skipping out-of-bounds chunk [" + cx + ", " + cz + "] at block " + x + "," + y + "," + z);
-                            }
+                        if (cz > 2000000 || cz < -2000000 || cx > 2000000 || cx < -2000000) {
+                            plugin.getLogger().warning("[Shrine] Skipping out-of-bounds chunk [" + cx + ", " + cz + "] at block " + x + "," + y + "," + z + " (packed=" + packed + ")");
                             chunkX = cx;
                             chunkZ = cz;
                             chunk = null;
@@ -205,7 +201,7 @@ public class FastAsyncHandler {
             long chunkKey = chunkEntry.getKey();
             int chunkX = (int) (chunkKey >> 32);
             int chunkZ = (int) chunkKey;
-            if (chunkZ > 30000000 || chunkZ < -30000000 || chunkX > 30000000 || chunkX < -30000000) continue;
+            if (chunkZ > 2000000 || chunkZ < -2000000 || chunkX > 2000000 || chunkX < -2000000) continue;
             if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
             Chunk chunk = world.getChunkAt(chunkX, chunkZ);
             for (long[] data : chunkEntry.getValue()) {
@@ -303,7 +299,7 @@ public class FastAsyncHandler {
             long chunkKey = entry.getKey();
             int chunkX = (int) (chunkKey >> 32);
             int chunkZ = (int) chunkKey;
-            if (chunkZ > 30000000 || chunkZ < -30000000 || chunkX > 30000000 || chunkX < -30000000) continue;
+            if (chunkZ > 2000000 || chunkZ < -2000000 || chunkX > 2000000 || chunkX < -2000000) continue;
             if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
             Chunk chunk = world.getChunkAt(chunkX, chunkZ);
             for (int[] pos : entry.getValue()) {
