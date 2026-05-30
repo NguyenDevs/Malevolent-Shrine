@@ -61,14 +61,22 @@ public class ShrineManager {
             return false;
         }
 
-        if (worldGuardHandler != null && !worldGuardHandler.isAllowed(caster)) {
-            caster.sendMessage(Component.text("Shrine is not allowed in this area!", NamedTextColor.RED));
-            return false;
+        if (worldGuardHandler != null) {
+            if (!worldGuardHandler.isAllowed(caster)) {
+                caster.sendMessage(Component.text("Shrine is not allowed in this area!", NamedTextColor.RED));
+                return false;
+            }
         }
 
         int durationTicks = config.getDurationSeconds() * 20;
         Location center = caster.getLocation();
         double radius = config.getDefaultRadius();
+
+        if (worldGuardHandler != null && WorldGuardHandler.isLocationProtected(
+                center.getWorld(), center.getBlockX(), center.getBlockY(), center.getBlockZ())) {
+            caster.sendMessage(Component.text("This area is protected! Shrine cannot be activated here!", NamedTextColor.RED));
+            return false;
+        }
 
         ShrineSession session = new ShrineSession(
                 caster.getUniqueId(), center, radius, durationTicks

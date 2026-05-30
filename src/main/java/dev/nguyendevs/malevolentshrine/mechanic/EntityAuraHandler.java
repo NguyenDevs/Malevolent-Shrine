@@ -2,6 +2,7 @@ package dev.nguyendevs.malevolentshrine.mechanic;
 
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
+import dev.nguyendevs.malevolentshrine.manager.WorldGuardHandler;
 import dev.nguyendevs.malevolentshrine.util.ParticleUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -24,6 +25,7 @@ public class EntityAuraHandler {
         for (Entity entity : center.getWorld().getNearbyEntities(center, radius, radius, radius)) {
             if (entity instanceof LivingEntity le && !entity.getUniqueId().equals(session.getPlayerId())) {
                 if (entity.getLocation().distanceSquared(center) <= radiusSq) {
+                    if (WorldGuardHandler.isEntityProtected(entity)) continue;
                     le.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, weaknessDuration, weaknessAmp, false, false));
                     session.getAffectedEntities().add(le);
                 }

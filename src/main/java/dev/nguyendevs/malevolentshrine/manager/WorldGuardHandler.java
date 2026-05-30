@@ -13,10 +13,12 @@ import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 public class WorldGuardHandler {
     private static StateFlag MALEVOLENT_SHRINE_FLAG;
+    private static StateFlag MS_PROTECT_FLAG;
 
     public static void registerFlag() {
         FlagRegistry registry = WorldGuard.getInstance().getFlagRegistry();
@@ -26,6 +28,13 @@ public class WorldGuardHandler {
             MALEVOLENT_SHRINE_FLAG = flag;
         } catch (FlagConflictException e) {
             MALEVOLENT_SHRINE_FLAG = (StateFlag) registry.get("malevolent-shrine");
+        }
+        try {
+            StateFlag flag = new StateFlag("ms-protect", false);
+            registry.register(flag);
+            MS_PROTECT_FLAG = flag;
+        } catch (FlagConflictException e) {
+            MS_PROTECT_FLAG = (StateFlag) registry.get("ms-protect");
         }
     }
 
@@ -37,6 +46,24 @@ public class WorldGuardHandler {
                 .getRegionContainer()
                 .createQuery()
                 .testState(weLoc, localPlayer, MALEVOLENT_SHRINE_FLAG);
+    }
+
+    public static boolean isLocationProtected(World world, int x, int y, int z) {
+        if (MS_PROTECT_FLAG == null) return false;
+        RegionManager regions = WorldGuard.getInstance().getPlatform()
+                .getRegionContainer().get(BukkitAdapter.adapt(world));
+        if (regions == null) return false;
+        BlockVector3 pt = BlockVector3.at(x, y, z);
+        for (ProtectedRegion region : regions.getApplicableRegions(pt)) {
+            StateFlag.State state = region.getFlag(MS_PROTECT_FLAG);
+            if (state != StateFlag.State.ALLOW) return true;
+        }
+        return false;
+    }
+
+    public static boolean isEntityProtected(Entity entity) {
+        return isLocationProtected(entity.getWorld(), entity.getLocation().getBlockX(),
+                entity.getLocation().getBlockY(), entity.getLocation().getBlockZ());
     }
 
     public static String createShrineRegion(World world, String id,

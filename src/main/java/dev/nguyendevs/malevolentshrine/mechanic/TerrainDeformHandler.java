@@ -3,6 +3,7 @@ package dev.nguyendevs.malevolentshrine.mechanic;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
+import dev.nguyendevs.malevolentshrine.manager.WorldGuardHandler;
 import dev.nguyendevs.malevolentshrine.schematic.ShrineSchematic;
 import dev.nguyendevs.malevolentshrine.util.BlockPatternGenerator;
 import org.bukkit.Chunk;
@@ -128,6 +129,7 @@ public class TerrainDeformHandler {
                                 surfaceBlocks.add(bp);
                                 edits.add(new BlockEdit(wx, wy, wz, air));
                             } else if (mat.isSolid() && isExposed(world, wx, wy, wz)) {
+                                if (WorldGuardHandler.isLocationProtected(world, wx, wy, wz)) continue;
                                 surfaceBlocks.add(bp);
                                 BlockData replacement;
                                 if (roots.contains(BlockPatternGenerator.pack(wx, wz))) {
@@ -196,6 +198,7 @@ public class TerrainDeformHandler {
                             if (dxSq + dz * dz + dy * dy > radiusSq) continue;
 
                             if (session.isInsideSchematic(wx, wy, wz)) continue;
+                            if (WorldGuardHandler.isLocationProtected(world, wx, wy, wz)) continue;
 
                             int rx = ((wx - cx) % cellSize + cellSize) % cellSize;
                             int ry = ((wy - cy) % cellSize + cellSize) % cellSize;
