@@ -20,7 +20,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import dev.nguyendevs.malevolentshrine.domain.BlockPos;
-import java.io.File;
+import dev.nguyendevs.malevolentshrine.schematic.ShrineSchematic;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -73,24 +73,25 @@ public class ShrineManager {
         );
 
         int schemY = center.getBlockY() + config.getSchematicYOffset();
+        int schemOx = center.getBlockX() - 21;
+        int schemOz = center.getBlockZ() - 28;
+        int schemMinY = schemY - 17;
 
         if (config.isSchematicEnabled()) {
-            File schemFile = new File(plugin.getDataFolder(), config.getSchematicFileName() + ".schem");
-            Set<BlockPos> originals = SchematicHandler.captureOriginals(
-                    schemFile, center.getWorld(),
-                    center.getBlockX(), schemY, center.getBlockZ(), plugin
+            Set<BlockPos> originals = ShrineSchematic.capture(
+                    center.getWorld(), schemOx, schemMinY, schemOz
             );
             session.getSchematicOriginalBlocks().addAll(originals);
             if (config.isDebugEnabled()) {
                 plugin.getLogger().info("[ShrineDebug] Captured " + originals.size() + " original schematic blocks");
             }
 
+            session.setSchematicBounds(schemOx, schemMinY, schemOz,
+                    schemOx + 42, schemMinY + 53, schemOz + 44);
+
             int delay = config.getSchematicPasteDelayTicks();
             int schemTaskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                SchematicHandler.pasteSchematic(
-                        schemFile, center.getWorld(),
-                        center.getBlockX(), schemY, center.getBlockZ(), plugin
-                );
+                ShrineSchematic.paste(center.getWorld(), schemOx, schemMinY, schemOz);
             }, delay).getTaskId();
             session.setSchematicPasteTaskId(schemTaskId);
         }

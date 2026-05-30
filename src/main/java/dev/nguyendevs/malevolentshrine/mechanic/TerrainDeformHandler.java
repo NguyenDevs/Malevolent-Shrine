@@ -3,6 +3,7 @@ package dev.nguyendevs.malevolentshrine.mechanic;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
+import dev.nguyendevs.malevolentshrine.schematic.ShrineSchematic;
 import dev.nguyendevs.malevolentshrine.util.BlockPatternGenerator;
 import org.bukkit.Chunk;
 import org.bukkit.ChunkSnapshot;
@@ -32,23 +33,34 @@ public class TerrainDeformHandler {
     }
 
     public void apply(ShrineSession session, ShrineConfig config) {
-        int id1 = applySurfaceReplacement(session, config);
-        if (id1 != -1) session.addDismantleTaskId(id1);
-        int id2 = applyDismantle(session, config);
-        if (id2 != -1) session.addDismantleTaskId(id2);
-    }
-
-    private int applySurfaceReplacement(ShrineSession session, ShrineConfig config) {
         Location center = session.getCenter();
         World world = center.getWorld();
-        if (world == null) return -1;
+        if (world == null) return;
 
         int cx = center.getBlockX();
         int cy = center.getBlockY();
         int cz = center.getBlockZ();
         int radius = (int) session.getRadius();
-        double radiusSq = radius * radius;
 
+        List<BlockEdit> surfaceEdits = collectSurfaceEdits(session, config, world, cx, cy, cz, radius);
+        List<BlockEdit> dismantleEdits = collectDismantleEdits(session, config, world, cx, cy, cz, radius);
+
+        surfaceEdits.sort(Comparator.comparingInt(e ->
+                Math.abs(e.x - cx) + Math.abs(e.y - cy) + Math.abs(e.z - cz)));
+        dismantleEdits.sort(Comparator.comparingInt(e ->
+                Math.abs(e.x - cx) + Math.abs(e.y - cy) + Math.abs(e.z - cz)));
+
+        List<BlockEdit> allEdits = new ArrayList<>(surfaceEdits.size() + dismantleEdits.size());
+        allEdits.addAll(surfaceEdits);
+        allEdits.addAll(dismantleEdits);
+
+        int id = scheduleEdits(world, allEdits, config);
+        if (id != -1) session.addDismantleTaskId(id);
+    }
+
+    private List<BlockEdit> collectSurfaceEdits(ShrineSession session, ShrineConfig config,
+                                                 World world, int cx, int cy, int cz, int radius) {
+        double radiusSq = radius * radius;
         Set<Long> roots = BlockPatternGenerator.generateRoots(cx, cz, radius);
 
         int minY = Math.max(world.getMinHeight(), cy - radius);
@@ -96,6 +108,7 @@ public class TerrainDeformHandler {
 
                             Material mat = snap.getBlockType(lx, wy, lz);
                             if (mat.isEmpty()) continue;
+                            if (mat == Material.BEDROCK) continue;
 
                             BlockPos bp = new BlockPos(wx, wy, wz, snap.getBlockData(lx, wy, lz));
                             if (surfaceBlocks.contains(bp)) continue;
@@ -119,21 +132,11 @@ public class TerrainDeformHandler {
             }
         }
 
-        edits.sort(Comparator.comparingInt(e ->
-                Math.abs(e.x - cx) + Math.abs(e.y - cy) + Math.abs(e.z - cz)));
-
-        return scheduleEdits(world, edits, config);
+        return edits;
     }
 
-    private int applyDismantle(ShrineSession session, ShrineConfig config) {
-        Location center = session.getCenter();
-        World world = center.getWorld();
-        if (world == null) return -1;
-
-        int cx = center.getBlockX();
-        int cy = center.getBlockY();
-        int cz = center.getBlockZ();
-        int radius = (int) session.getRadius();
+    private List<BlockEdit> collectDismantleEdits(ShrineSession session, ShrineConfig config,
+                                                   World world, int cx, int cy, int cz, int radius) {
         double radiusSq = radius * radius;
 
         int chunkSize = config.getDismantleChunkSize();
@@ -181,6 +184,8 @@ public class TerrainDeformHandler {
                             int dy = wy - cy;
                             if (dxSq + dz * dz + dy * dy > radiusSq) continue;
 
+                            if (session.isInsideSchematic(wx, wy, wz)) continue;
+
                             int rx = ((wx - cx) % cellSize + cellSize) % cellSize;
                             int ry = ((wy - cy) % cellSize + cellSize) % cellSize;
                             int rz = ((wz - cz) % cellSize + cellSize) % cellSize;
@@ -205,10 +210,7 @@ public class TerrainDeformHandler {
             }
         }
 
-        edits.sort(Comparator.comparingInt(e ->
-                Math.abs(e.x - cx) + Math.abs(e.y - cy) + Math.abs(e.z - cz)));
-
-        return scheduleEdits(world, edits, config);
+        return edits;
     }
 
     private int scheduleEdits(World world, List<BlockEdit> edits, ShrineConfig config) {
@@ -257,22 +259,41 @@ public class TerrainDeformHandler {
         World world = session.getCenter().getWorld();
         if (world == null) return;
 
-        List<BlockEdit> allEdits = new ArrayList<>();
+        List<BlockEdit> surfaceEdits = new ArrayList<>();
         for (BlockPos bp : session.getOriginalSurfaceBlocks()) {
-            allEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+            surfaceEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
         }
+        List<BlockEdit> dismantleEdits = new ArrayList<>();
         for (BlockPos bp : session.getOriginalDismantleBlocks()) {
-            allEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+            dismantleEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
         }
+        List<BlockEdit> schematicEdits = new ArrayList<>();
         for (BlockPos bp : session.getSchematicOriginalBlocks()) {
-            allEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+            schematicEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
         }
 
         int cx = session.getCenter().getBlockX();
         int cy = session.getCenter().getBlockY();
         int cz = session.getCenter().getBlockZ();
-        allEdits.sort(Comparator.comparingDouble(e ->
+        surfaceEdits.sort(Comparator.comparingDouble(e ->
                 -Math.sqrt(Math.pow(e.x - cx, 2) + Math.pow(e.y - cy, 2) + Math.pow(e.z - cz, 2))));
+        dismantleEdits.sort(Comparator.comparingDouble(e ->
+                -Math.sqrt(Math.pow(e.x - cx, 2) + Math.pow(e.y - cy, 2) + Math.pow(e.z - cz, 2))));
+        schematicEdits.sort(Comparator.comparingDouble(e ->
+                -Math.sqrt(Math.pow(e.x - cx, 2) + Math.pow(e.y - cy, 2) + Math.pow(e.z - cz, 2))));
+
+        List<BlockEdit> allEdits = new ArrayList<>(
+                surfaceEdits.size() + dismantleEdits.size() + schematicEdits.size());
+        allEdits.addAll(surfaceEdits);
+        allEdits.addAll(dismantleEdits);
+        allEdits.addAll(schematicEdits);
+
+        if (config.isDebugEnabled()) {
+            plugin.getLogger().info("[ShrineDebug] Restoring " + allEdits.size() + " blocks" +
+                    " (surface=" + surfaceEdits.size() +
+                    ", dismantle=" + dismantleEdits.size() +
+                    ", schematic=" + schematicEdits.size() + ")");
+        }
 
         scheduleEdits(world, allEdits, config);
     }
@@ -304,5 +325,4 @@ public class TerrainDeformHandler {
             this.x = x; this.y = y; this.z = z; this.data = data;
         }
     }
-
 }

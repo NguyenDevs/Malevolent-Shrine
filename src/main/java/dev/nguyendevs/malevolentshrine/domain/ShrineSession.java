@@ -26,6 +26,9 @@ public class ShrineSession {
     private int cleaveNextInterval;
     private final List<Integer> dismantleTaskIds;
     private int schematicPasteTaskId;
+    private int schemMinX, schemMinY, schemMinZ;
+    private int schemMaxX, schemMaxY, schemMaxZ;
+    private boolean hasSchematicBounds;
     private final BossBar bossBar;
     private final Set<UUID> bossBarViewers;
 
@@ -43,6 +46,7 @@ public class ShrineSession {
         this.affectedEntities = new HashSet<>();
         this.dismantleTaskIds = new ArrayList<>();
         this.schematicPasteTaskId = -1;
+        this.hasSchematicBounds = false;
         this.bossBar = Bukkit.createBossBar(
                 ChatColor.DARK_RED + "Malevolent Shrine",
                 BarColor.RED,
@@ -78,4 +82,17 @@ public class ShrineSession {
 
     public BossBar getBossBar() { return bossBar; }
     public Set<UUID> getBossBarViewers() { return bossBarViewers; }
+
+    public void setSchematicBounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        this.schemMinX = minX; this.schemMinY = minY; this.schemMinZ = minZ;
+        this.schemMaxX = maxX; this.schemMaxY = maxY; this.schemMaxZ = maxZ;
+        this.hasSchematicBounds = true;
+    }
+
+    public boolean isInsideSchematic(int x, int y, int z) {
+        return hasSchematicBounds
+                && x >= schemMinX && x <= schemMaxX
+                && y >= schemMinY && y <= schemMaxY
+                && z >= schemMinZ && z <= schemMaxZ;
+    }
 }
