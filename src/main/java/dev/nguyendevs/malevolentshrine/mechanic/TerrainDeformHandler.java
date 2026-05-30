@@ -9,6 +9,8 @@ import org.bukkit.Chunk;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -53,6 +55,15 @@ public class TerrainDeformHandler {
         List<BlockEdit> allEdits = new ArrayList<>(surfaceEdits.size() + dismantleEdits.size());
         allEdits.addAll(surfaceEdits);
         allEdits.addAll(dismantleEdits);
+
+        if (!allEdits.isEmpty()) {
+            if (config.isReplaceBlockSounds()) {
+                world.playSound(center, Sound.BLOCK_STONE_BREAK, SoundCategory.BLOCKS, 0.8f, 0.6f);
+            }
+            if (!dismantleEdits.isEmpty() && config.isDismantleSounds()) {
+                world.playSound(center, Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, SoundCategory.BLOCKS, 0.6f, 0.3f);
+            }
+        }
 
         int id = scheduleEdits(world, allEdits, config);
         if (id != -1) session.addDismantleTaskId(id);
@@ -264,8 +275,10 @@ public class TerrainDeformHandler {
             surfaceEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
         }
         List<BlockEdit> dismantleEdits = new ArrayList<>();
-        for (BlockPos bp : session.getOriginalDismantleBlocks()) {
-            dismantleEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+        if (config.isRecoverStructure()) {
+            for (BlockPos bp : session.getOriginalDismantleBlocks()) {
+                dismantleEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
+            }
         }
         List<BlockEdit> schematicEdits = new ArrayList<>();
         for (BlockPos bp : session.getSchematicOriginalBlocks()) {
@@ -287,6 +300,15 @@ public class TerrainDeformHandler {
         allEdits.addAll(surfaceEdits);
         allEdits.addAll(dismantleEdits);
         allEdits.addAll(schematicEdits);
+
+        if (!allEdits.isEmpty()) {
+            if (!surfaceEdits.isEmpty() && config.isReplaceBlockSounds()) {
+                world.playSound(session.getCenter(), Sound.BLOCK_STONE_BREAK, SoundCategory.BLOCKS, 0.8f, 0.6f);
+            }
+            if (!dismantleEdits.isEmpty() && config.isDismantleSounds()) {
+                world.playSound(session.getCenter(), Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, SoundCategory.BLOCKS, 0.6f, 0.3f);
+            }
+        }
 
         if (config.isDebugEnabled()) {
             plugin.getLogger().info("[ShrineDebug] Restoring " + allEdits.size() + " blocks" +

@@ -19,6 +19,7 @@ cleave:
 dismantle:
   chunk-size: 5
   gap-size: 2
+  recover-structure: true
 
 schematic:
   enabled: true
@@ -39,6 +40,7 @@ sounds:
   deactivation: true
   cleave: true
   dismantle: true
+  replace-block: true
 
 debug:
   enabled: false

@@ -23,6 +23,7 @@ public class ShrineConfig {
     private double cleaveDamage;
     private int dismantleChunkSize;
     private int dismantleGapSize;
+    private boolean recoverStructure;
     private String schematicFileName;
     private int schematicPasteDelayTicks;
     private List<String> disabledWorlds;
@@ -42,6 +43,7 @@ public class ShrineConfig {
     private boolean deactivationSounds;
     private boolean cleaveSounds;
     private boolean dismantleSounds;
+    private boolean replaceBlockSounds;
 
     public ShrineConfig(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -73,6 +75,7 @@ public class ShrineConfig {
         ConfigurationSection dismantle = plugin.getConfig().getConfigurationSection("dismantle");
         dismantleChunkSize = dismantle.getInt("chunk-size", 5);
         dismantleGapSize = dismantle.getInt("gap-size", 2);
+        recoverStructure = dismantle.getBoolean("recover-structure", true);
 
         ConfigurationSection schematic = plugin.getConfig().getConfigurationSection("schematic");
         schematicEnabled = schematic.getBoolean("enabled", true);
@@ -100,6 +103,7 @@ public class ShrineConfig {
         deactivationSounds = sounds.getBoolean("deactivation", true);
         cleaveSounds = sounds.getBoolean("cleave", true);
         dismantleSounds = sounds.getBoolean("dismantle", true);
+        replaceBlockSounds = sounds.getBoolean("replace-block", true);
     }
 
     public double getDefaultRadius() { return defaultRadius; }
@@ -115,6 +119,7 @@ public class ShrineConfig {
     public double getCleaveDamage() { return cleaveDamage; }
     public int getDismantleChunkSize() { return dismantleChunkSize; }
     public int getDismantleGapSize() { return dismantleGapSize; }
+    public boolean isRecoverStructure() { return recoverStructure; }
     public boolean isSchematicEnabled() { return schematicEnabled; }
     public String getSchematicFileName() { return schematicFileName; }
     public int getSchematicPasteDelayTicks() { return schematicPasteDelayTicks; }
@@ -134,4 +139,5 @@ public class ShrineConfig {
     public boolean isDeactivationSounds() { return deactivationSounds; }
     public boolean isCleaveSounds() { return cleaveSounds; }
     public boolean isDismantleSounds() { return dismantleSounds; }
+    public boolean isReplaceBlockSounds() { return replaceBlockSounds; }
 }
