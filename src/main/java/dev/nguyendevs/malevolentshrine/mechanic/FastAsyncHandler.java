@@ -83,11 +83,22 @@ public class FastAsyncHandler {
                     int cz = z >> 4;
 
                     if (cx != chunkX || cz != chunkZ) {
+                        if (cz > 30000000 || cz < -30000000 || cx > 30000000 || cx < -30000000) {
+                            if (debug) {
+                                plugin.getLogger().warning("[ShrineDebug] Skipping out-of-bounds chunk [" + cx + ", " + cz + "] at block " + x + "," + y + "," + z);
+                            }
+                            chunkX = cx;
+                            chunkZ = cz;
+                            chunk = null;
+                            continue;
+                        }
                         chunkX = cx;
                         chunkZ = cz;
                         chunk = world.getChunkAt(cx, cz);
                     }
-                    chunk.getBlock(x & 15, y, z & 15).setBlockData(data, false);
+                    if (chunk != null) {
+                        chunk.getBlock(x & 15, y, z & 15).setBlockData(data, false);
+                    }
                 }
 
                 if (idx[0] >= blockCoords.size()) {
@@ -143,11 +154,22 @@ public class FastAsyncHandler {
                     int cz = z >> 4;
 
                     if (cx != chunkX || cz != chunkZ) {
+                        if (cz > 30000000 || cz < -30000000 || cx > 30000000 || cx < -30000000) {
+                            if (debug) {
+                                plugin.getLogger().warning("[ShrineDebug] Skipping out-of-bounds chunk [" + cx + ", " + cz + "] at block " + x + "," + y + "," + z);
+                            }
+                            chunkX = cx;
+                            chunkZ = cz;
+                            chunk = null;
+                            continue;
+                        }
                         chunkX = cx;
                         chunkZ = cz;
                         chunk = world.getChunkAt(cx, cz);
                     }
-                    chunk.getBlock(x & 15, y, z & 15).setBlockData(entry.getValue(), false);
+                    if (chunk != null) {
+                        chunk.getBlock(x & 15, y, z & 15).setBlockData(entry.getValue(), false);
+                    }
                 }
 
                 if (idx[0] >= entries.size()) {
@@ -183,6 +205,7 @@ public class FastAsyncHandler {
             long chunkKey = chunkEntry.getKey();
             int chunkX = (int) (chunkKey >> 32);
             int chunkZ = (int) chunkKey;
+            if (chunkZ > 30000000 || chunkZ < -30000000 || chunkX > 30000000 || chunkX < -30000000) continue;
             if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
             Chunk chunk = world.getChunkAt(chunkX, chunkZ);
             for (long[] data : chunkEntry.getValue()) {
@@ -280,6 +303,7 @@ public class FastAsyncHandler {
             long chunkKey = entry.getKey();
             int chunkX = (int) (chunkKey >> 32);
             int chunkZ = (int) chunkKey;
+            if (chunkZ > 30000000 || chunkZ < -30000000 || chunkX > 30000000 || chunkX < -30000000) continue;
             if (!world.isChunkLoaded(chunkX, chunkZ)) continue;
             Chunk chunk = world.getChunkAt(chunkX, chunkZ);
             for (int[] pos : entry.getValue()) {
