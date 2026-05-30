@@ -191,7 +191,11 @@ public class TerrainDeformHandler {
 
                             BlockPos bp = new BlockPos(wx, wy, wz, snap.getBlockData(lx, wy, lz));
                             if (dismantleBlocks.contains(bp)) continue;
-                            if (surfaceBlocks.contains(bp)) continue;
+
+                            if (surfaceBlocks.contains(bp)) {
+                                edits.add(new BlockEdit(wx, wy, wz, air));
+                                continue;
+                            }
                             dismantleBlocks.add(bp);
 
                             edits.add(new BlockEdit(wx, wy, wz, air));
