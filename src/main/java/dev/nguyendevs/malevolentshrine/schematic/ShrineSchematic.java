@@ -480,24 +480,28 @@ public class ShrineSchematic {
         };
 
         String ver = Bukkit.getBukkitVersion();
-        boolean oldServer = false;
+        boolean paleOakFallback = false;
+        boolean driedGhastFallback = false;
         try {
             String[] parts = ver.split("\\.|-");
             int major = Integer.parseInt(parts[0]);
             int minor = Integer.parseInt(parts[1]);
-            oldServer = major < 1 || (major == 1 && minor < 21) || (major == 1 && minor == 21 && parts.length > 2 && Integer.parseInt(parts[2]) < 4);
+            int patch = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
+            boolean ge1214 = major > 1 || (major == 1 && (minor > 21 || (minor == 21 && patch >= 4)));
+            boolean ge1216 = major > 1 || (major == 1 && (minor > 21 || (minor == 21 && patch >= 6)));
+            paleOakFallback = !ge1214;
+            driedGhastFallback = !ge1216;
         } catch (Exception e) {
-            oldServer = false;
+            paleOakFallback = false;
+            driedGhastFallback = false;
         }
 
-        if (oldServer) {
-            for (int i = 0; i < paletteStrs.length; i++) {
-                String s = paletteStrs[i];
-                if (s.startsWith("minecraft:pale_oak_")) {
-                    paletteStrs[i] = s.replace("pale_oak_", "crimson_");
-                } else if (s.startsWith("minecraft:dried_ghast")) {
-                    paletteStrs[i] = "minecraft:netherrack";
-                }
+        for (int i = 0; i < paletteStrs.length; i++) {
+            String s = paletteStrs[i];
+            if (paleOakFallback && s.startsWith("minecraft:pale_oak_")) {
+                paletteStrs[i] = s.replace("pale_oak_", "crimson_");
+            } else if (driedGhastFallback && s.startsWith("minecraft:dried_ghast")) {
+                paletteStrs[i] = "minecraft:netherrack";
             }
         }
 
