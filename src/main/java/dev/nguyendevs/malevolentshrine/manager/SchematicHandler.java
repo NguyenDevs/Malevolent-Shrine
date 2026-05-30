@@ -28,22 +28,15 @@ public class SchematicHandler {
         return WORLDEDIT_AVAILABLE;
     }
 
-    public static Set<BlockPos> pasteAndCapture(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
+    public static Set<BlockPos> captureOriginals(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
         Set<BlockPos> result = new HashSet<>();
         if (!isAvailable() || !schemFile.exists()) return result;
 
         try {
-            Class<?> bukkitAdapter = Class.forName("com.sk89q.worldedit.bukkit.BukkitAdapter");
             Class<?> clipboardFormat = Class.forName("com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat");
             Class<?> clipboardFormats = Class.forName("com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats");
             Class<?> clipboardClass = Class.forName("com.sk89q.worldedit.extent.clipboard.Clipboard");
-            Class<?> extentClass = Class.forName("com.sk89q.worldedit.extent.Extent");
-            Class<?> editorClass = Class.forName("com.sk89q.worldedit.EditSession");
-            Class<?> worldEditClass = Class.forName("com.sk89q.worldedit.WorldEdit");
             Class<?> bv3Class = Class.forName("com.sk89q.worldedit.math.BlockVector3");
-            Class<?> weWorldClass = Class.forName("com.sk89q.worldedit.world.World");
-
-            Object weWorld = bukkitAdapter.getMethod("adapt", World.class).invoke(null, world);
 
             Object format = clipboardFormats.getMethod("findByFile", File.class).invoke(null, schemFile);
             if (format == null) return result;
@@ -99,6 +92,38 @@ public class SchematicHandler {
                         }
                     }
                 }
+            }
+            return result;
+        } catch (Throwable e) {
+            plugin.getLogger().warning("Failed to capture schematic originals: " + e.getMessage());
+            return result;
+        }
+    }
+
+    public static void pasteSchematic(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
+        if (!isAvailable() || !schemFile.exists()) return;
+
+        try {
+            Class<?> bukkitAdapter = Class.forName("com.sk89q.worldedit.bukkit.BukkitAdapter");
+            Class<?> clipboardFormat = Class.forName("com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat");
+            Class<?> clipboardFormats = Class.forName("com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats");
+            Class<?> clipboardClass = Class.forName("com.sk89q.worldedit.extent.clipboard.Clipboard");
+            Class<?> extentClass = Class.forName("com.sk89q.worldedit.extent.Extent");
+            Class<?> editorClass = Class.forName("com.sk89q.worldedit.EditSession");
+            Class<?> worldEditClass = Class.forName("com.sk89q.worldedit.WorldEdit");
+            Class<?> bv3Class = Class.forName("com.sk89q.worldedit.math.BlockVector3");
+            Class<?> weWorldClass = Class.forName("com.sk89q.worldedit.world.World");
+
+            Object weWorld = bukkitAdapter.getMethod("adapt", World.class).invoke(null, world);
+
+            Object format = clipboardFormats.getMethod("findByFile", File.class).invoke(null, schemFile);
+            if (format == null) return;
+
+            try (InputStream fis = new FileInputStream(schemFile)) {
+                Object reader = clipboardFormat.getMethod("getReader", InputStream.class).invoke(format, fis);
+                Class<?> readerClass = Class.forName("com.sk89q.worldedit.extent.clipboard.io.ClipboardReader");
+                Object clipboard = readerClass.getMethod("read").invoke(reader);
+                readerClass.getMethod("close").invoke(reader);
 
                 Object worldEdit = worldEditClass.getMethod("getInstance").invoke(null);
                 Object editSession = worldEditClass
@@ -127,15 +152,13 @@ public class SchematicHandler {
                             .getMethod("complete", Class.forName("com.sk89q.worldedit.function.operation.Operation"))
                             .invoke(null, operation);
                 } catch (Throwable e) {
-                    plugin.getLogger().warning("Failed to paste schematic (undo will still work): " + e.getMessage());
+                    plugin.getLogger().warning("Failed to paste schematic: " + e.getMessage());
                 } finally {
                     editorClass.getMethod("close").invoke(editSession);
                 }
             }
-            return result;
         } catch (Throwable e) {
-            plugin.getLogger().warning("Failed to load schematic: " + e.getMessage());
-            return result;
+            plugin.getLogger().warning("Failed to load schematic for paste: " + e.getMessage());
         }
     }
 }

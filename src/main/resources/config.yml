@@ -24,6 +24,7 @@ schematic:
   enabled: true
   file-name: shrine
   paste-delay-ticks: 20
+  y-offset: 23
 
 particles:
   activation: true
