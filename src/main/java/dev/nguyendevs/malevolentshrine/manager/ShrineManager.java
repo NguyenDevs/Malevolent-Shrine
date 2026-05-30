@@ -72,29 +72,26 @@ public class ShrineManager {
                 caster.getUniqueId(), center, radius, durationTicks
         );
 
-        int schemY = center.getBlockY() + config.getSchematicYOffset();
+        int schemY = center.getBlockY() + 23;
         int schemOx = center.getBlockX() - 21;
         int schemOz = center.getBlockZ() - 28;
         int schemMinY = schemY - 17;
 
-        if (config.isSchematicEnabled()) {
-            Set<BlockPos> originals = ShrineSchematic.capture(
-                    center.getWorld(), schemOx, schemMinY, schemOz
-            );
-            session.getSchematicOriginalBlocks().addAll(originals);
-            if (config.isDebugEnabled()) {
-                plugin.getLogger().info("[ShrineDebug] Captured " + originals.size() + " original schematic blocks");
-            }
-
-            session.setSchematicBounds(schemOx, schemMinY, schemOz,
-                    schemOx + 42, schemMinY + 53, schemOz + 44);
-
-            int delay = config.getSchematicPasteDelayTicks();
-            int schemTaskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                ShrineSchematic.paste(center.getWorld(), schemOx, schemMinY, schemOz);
-            }, delay).getTaskId();
-            session.setSchematicPasteTaskId(schemTaskId);
+        Set<BlockPos> originals = ShrineSchematic.capture(
+                center.getWorld(), schemOx, schemMinY, schemOz
+        );
+        session.getSchematicOriginalBlocks().addAll(originals);
+        if (config.isDebugEnabled()) {
+            plugin.getLogger().info("[ShrineDebug] Captured " + originals.size() + " original schematic blocks");
         }
+
+        session.setSchematicBounds(schemOx, schemMinY, schemOz,
+                schemOx + 42, schemMinY + 53, schemOz + 44);
+
+        int schemTaskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            ShrineSchematic.paste(center.getWorld(), schemOx, schemMinY, schemOz);
+        }, 15).getTaskId();
+        session.setSchematicPasteTaskId(schemTaskId);
 
         Location teleportLoc = caster.getLocation().clone();
         teleportLoc.setY(schemY + 0.5);

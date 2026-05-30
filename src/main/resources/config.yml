@@ -21,12 +21,6 @@ dismantle:
   gap-size: 2
   recover-structure: true
 
-schematic:
-  enabled: true
-  file-name: shrine
-  paste-delay-ticks: 20
-  y-offset: 23
-
 particles:
   activation: true
   deactivation: true
