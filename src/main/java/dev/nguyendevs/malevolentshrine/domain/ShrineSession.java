@@ -1,7 +1,13 @@
 package dev.nguyendevs.malevolentshrine.domain;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Entity;
 
 import java.util.*;
@@ -16,10 +22,13 @@ public class ShrineSession {
     private int taskId;
     private final Map<Long, BlockData> originalSurfaceBlocks;
     private final Map<Long, BlockData> originalDismantleBlocks;
+    private final Map<Long, BlockData> schematicOriginalBlocks;
     private final Set<Entity> affectedEntities;
     private int cleaveTickCounter;
     private int cleaveNextInterval;
     private final List<Integer> dismantleTaskIds;
+    private final BossBar bossBar;
+    private final Set<UUID> bossBarViewers;
 
     public ShrineSession(UUID playerId, Location center, double radius, int durationTicks) {
         this.playerId = playerId;
@@ -31,8 +40,15 @@ public class ShrineSession {
         this.taskId = -1;
         this.originalSurfaceBlocks = new HashMap<>();
         this.originalDismantleBlocks = new HashMap<>();
+        this.schematicOriginalBlocks = new HashMap<>();
         this.affectedEntities = new HashSet<>();
         this.dismantleTaskIds = new ArrayList<>();
+        this.bossBar = Bukkit.createBossBar(
+                String.valueOf(Component.text("Malevolent Shrine", NamedTextColor.DARK_RED)),
+                BarColor.RED,
+                BarStyle.SEGMENTED_20
+        );
+        this.bossBarViewers = new HashSet<>();
     }
 
     public UUID getPlayerId() { return playerId; }
@@ -47,6 +63,7 @@ public class ShrineSession {
     public void setTaskId(int taskId) { this.taskId = taskId; }
     public Map<Long, BlockData> getOriginalSurfaceBlocks() { return originalSurfaceBlocks; }
     public Map<Long, BlockData> getOriginalDismantleBlocks() { return originalDismantleBlocks; }
+    public Map<Long, BlockData> getSchematicOriginalBlocks() { return schematicOriginalBlocks; }
     public Set<Entity> getAffectedEntities() { return affectedEntities; }
     public int getCleaveTickCounter() { return cleaveTickCounter; }
     public void setCleaveTickCounter(int cleaveTickCounter) { this.cleaveTickCounter = cleaveTickCounter; }
@@ -55,4 +72,7 @@ public class ShrineSession {
 
     public List<Integer> getDismantleTaskIds() { return dismantleTaskIds; }
     public void addDismantleTaskId(int taskId) { dismantleTaskIds.add(taskId); }
+
+    public BossBar getBossBar() { return bossBar; }
+    public Set<UUID> getBossBarViewers() { return bossBarViewers; }
 }

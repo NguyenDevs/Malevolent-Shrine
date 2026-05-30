@@ -4,8 +4,7 @@ version: '${version}'
 main: dev.nguyendevs.malevolentshrine.MalevolentShrinePlugin
 api-version: '1.21'
 load: POSTWORLD
-depend: [ProtocolLib]
-softdepend: [WorldGuard, FastAsyncWorldEdit]
+softdepend: [WorldGuard, FastAsyncWorldEdit, ProtocolLib]
 
 commands:
   shrine:

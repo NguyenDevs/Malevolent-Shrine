@@ -114,6 +114,10 @@ public class FastAsyncHandler {
         return task.runTaskTimer(plugin, 0, 1).getTaskId();
     }
 
+    public static int setBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick) {
+        return restoreBlocksBatched(plugin, world, blocks, blocksPerTick);
+    }
+
     public static int restoreBlocksBatched(JavaPlugin plugin, World world, Map<Long, BlockData> blocks, int blocksPerTick) {
         if (blocks.isEmpty()) return -1;
         if (FAWE_AVAILABLE) {

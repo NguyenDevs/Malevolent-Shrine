@@ -1,9 +1,5 @@
 package dev.nguyendevs.malevolentshrine.mechanic;
 
-import com.comphenix.protocol.PacketType;
-import com.comphenix.protocol.ProtocolLibrary;
-import com.comphenix.protocol.events.PacketContainer;
-import com.comphenix.protocol.wrappers.WrappedBlockData;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.util.BlockPatternGenerator;
@@ -17,7 +13,6 @@ import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
@@ -56,7 +51,7 @@ public class TerrainDeformHandler {
 
         Set<Long> roots = BlockPatternGenerator.generateRoots(cx, cz, radius);
 
-        Map<Long, Map<Short, WrappedBlockData>> sectionBundles = new HashMap<>();
+        Map<Long, BlockData> replacements = new HashMap<>();
 
         int minY = Math.max(world.getMinHeight(), cy - radius);
         int maxYBlock = Math.min(world.getMaxHeight() - 1, cy + radius);
@@ -124,14 +119,7 @@ public class TerrainDeformHandler {
                                 replacement = rng.nextBoolean() ? soulSand : soulSoil;
                             }
 
-                            int sectionY = wy >> 4;
-                            long sectionKey = ((long) chunkX << 42) | ((long) chunkZ << 20) | (long) sectionY;
-                            short posInSection = (short) ((lx << 8) | (lz << 4) | (wy & 0xF));
-
-                            sectionBundles
-                                    .computeIfAbsent(sectionKey, k -> new HashMap<>())
-                                    .put(posInSection, WrappedBlockData.createData(replacement));
-
+                            replacements.put(keyXyz, replacement);
                             replacedCount++;
                         }
                     }
@@ -139,7 +127,10 @@ public class TerrainDeformHandler {
             }
         }
 
-        sendSectionPackets(world, sectionBundles);
+        int taskId = FastAsyncHandler.setBlocksBatched(plugin, world, replacements, config.getDebugBlocksPerTick());
+        if (taskId != -1) {
+            session.addDismantleTaskId(taskId);
+        }
 
         if (config.isDebugEnabled()) {
             long elapsed = System.nanoTime() - startTime;
@@ -280,97 +271,32 @@ public class TerrainDeformHandler {
 
         long startTime = System.nanoTime();
 
-        int taskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalDismantleBlocks(), config.getDebugBlocksPerTick());
-        if (taskId != -1) {
-            session.addDismantleTaskId(taskId);
+        int surfaceTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalSurfaceBlocks(), config.getDebugBlocksPerTick());
+        if (surfaceTaskId != -1) {
+            session.addDismantleTaskId(surfaceTaskId);
         }
 
-        Map<Long, Map<Short, WrappedBlockData>> restoreBundles = new HashMap<>();
-        for (Map.Entry<Long, BlockData> entry : session.getOriginalSurfaceBlocks().entrySet()) {
-            long packed = entry.getKey();
-            int x = BlockPosUtil.unpackX(packed);
-            int y = BlockPosUtil.unpackY(packed);
-            int z = BlockPosUtil.unpackZ(packed);
-            int chunkX = x >> 4;
-            int chunkZ = z >> 4;
-            int sectionY = y >> 4;
-            long sectionKey = ((long) chunkX << 42) | ((long) chunkZ << 20) | (long) sectionY;
-            short posInSection = (short) (((x & 0xF) << 8) | ((z & 0xF) << 4) | (y & 0xF));
-
-            restoreBundles
-                    .computeIfAbsent(sectionKey, k -> new HashMap<>())
-                    .put(posInSection, WrappedBlockData.createData(entry.getValue()));
+        int dismantleTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getOriginalDismantleBlocks(), config.getDebugBlocksPerTick());
+        if (dismantleTaskId != -1) {
+            session.addDismantleTaskId(dismantleTaskId);
         }
 
-        sendSectionPackets(world, restoreBundles);
+        if (!session.getSchematicOriginalBlocks().isEmpty()) {
+            int schemTaskId = FastAsyncHandler.restoreBlocksBatched(plugin, world, session.getSchematicOriginalBlocks(), config.getDebugBlocksPerTick());
+            if (schemTaskId != -1) {
+                session.addDismantleTaskId(schemTaskId);
+            }
+        }
 
         if (config.isDebugEnabled()) {
             long elapsed = System.nanoTime() - startTime;
             plugin.getLogger().info(String.format(
-                    "[ShrineDebug] Restore: %d surface + %d dismantle blocks, %.2f ms",
+                    "[ShrineDebug] Restore: %d surface + %d dismantle + %d schematic blocks, %.2f ms",
                     session.getOriginalSurfaceBlocks().size(),
                     session.getOriginalDismantleBlocks().size(),
+                    session.getSchematicOriginalBlocks().size(),
                     elapsed / 1_000_000.0
             ));
-        }
-    }
-
-    private void sendSectionPackets(World world, Map<Long, Map<Short, WrappedBlockData>> sectionBundles) {
-        if (sectionBundles.isEmpty()) return;
-
-        List<Player> players = world.getPlayers();
-        if (players.isEmpty()) return;
-
-        boolean useProtocolLib = true;
-        for (Map.Entry<Long, Map<Short, WrappedBlockData>> entry : sectionBundles.entrySet()) {
-            long sectionKey = entry.getKey();
-            Map<Short, WrappedBlockData> changes = entry.getValue();
-            if (changes.isEmpty()) continue;
-
-            short[] positions = new short[changes.size()];
-            WrappedBlockData[] blockData = new WrappedBlockData[changes.size()];
-            int idx = 0;
-            for (Map.Entry<Short, WrappedBlockData> change : changes.entrySet()) {
-                positions[idx] = change.getKey();
-                blockData[idx] = change.getValue();
-                idx++;
-            }
-
-            if (useProtocolLib) {
-                try {
-                    PacketContainer packet = new PacketContainer(PacketType.Play.Server.MULTI_BLOCK_CHANGE);
-                    packet.getLongs().write(0, sectionKey);
-                    packet.getShortArrays().write(0, positions);
-                    packet.getBlockDataArrays().write(0, blockData);
-
-                    for (Player player : players) {
-                        ProtocolLibrary.getProtocolManager().sendServerPacket(player, packet.deepClone());
-                    }
-                    continue;
-                } catch (Exception e) {
-                    useProtocolLib = false;
-                }
-            }
-
-            Map<Location, BlockData> fallback = new HashMap<>();
-            for (int i = 0; i < positions.length; i++) {
-                short pos = positions[i];
-                int chunkX = (int) (sectionKey >> 42);
-                int chunkZ = (int) ((sectionKey >> 20) & 0x3FFFFFL);
-                int sectionY = (int) (sectionKey & 0xFFFFF);
-                int lx = (pos >> 8) & 0xF;
-                int lz = (pos >> 4) & 0xF;
-                int ly = pos & 0xF;
-                int wx = (chunkX << 4) | lx;
-                int wz = (chunkZ << 4) | lz;
-                int wy = (sectionY << 4) | ly;
-                fallback.put(new Location(world, wx, wy, wz), blockData[i].getType().createBlockData());
-            }
-            for (Player player : players) {
-                try {
-                    player.sendMultiBlockChange(fallback);
-                } catch (Exception ignored) {}
-            }
         }
     }
 }

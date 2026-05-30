@@ -9,8 +9,13 @@ import dev.nguyendevs.malevolentshrine.mechanic.EntityAuraHandler;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.Set;
+import java.util.UUID;
 
 public class ShrineTickTask extends BukkitRunnable {
     private final ShrineManager manager;
@@ -53,6 +58,14 @@ public class ShrineTickTask extends BukkitRunnable {
             }
         }
 
+        BossBar bossBar = session.getBossBar();
+        float progress = 1.0f - (float) session.getElapsedTicks() / session.getDurationTicks();
+        bossBar.setProgress(Math.max(0.0f, progress));
+
+        if (session.getElapsedTicks() % 20 == 0) {
+            updateBossBarViewers();
+        }
+
         energyTickCounter++;
         if (energyTickCounter >= 20) {
             energyTickCounter = 0;
@@ -80,6 +93,27 @@ public class ShrineTickTask extends BukkitRunnable {
         }
 
         cleaveHandler.tick(session, config);
+    }
+
+    private void updateBossBarViewers() {
+        BossBar bossBar = session.getBossBar();
+        Location center = session.getCenter();
+        double radius = session.getRadius();
+        double radiusSq = radius * radius;
+        Set<UUID> currentViewers = session.getBossBarViewers();
+
+        for (Player player : center.getWorld().getPlayers()) {
+            boolean inRange = player.getLocation().distanceSquared(center) <= radiusSq;
+            boolean isViewer = currentViewers.contains(player.getUniqueId());
+
+            if (inRange && !isViewer) {
+                bossBar.addPlayer(player);
+                currentViewers.add(player.getUniqueId());
+            } else if (!inRange && isViewer) {
+                bossBar.removePlayer(player);
+                currentViewers.remove(player.getUniqueId());
+            }
+        }
     }
 
     private boolean drainEnergy(Player caster) {

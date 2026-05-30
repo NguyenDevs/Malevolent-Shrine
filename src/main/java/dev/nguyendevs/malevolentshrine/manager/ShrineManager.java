@@ -13,6 +13,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -85,10 +86,16 @@ public class ShrineManager {
 
         File schemFile = new File(plugin.getDataFolder(), config.getSchematicFileName() + ".schem");
         int delay = config.getSchematicPasteDelayTicks();
-        Bukkit.getScheduler().runTaskLater(plugin, () ->
-                SchematicHandler.paste(schemFile, center.getWorld(),
-                        center.getBlockX(), center.getBlockY(), center.getBlockZ(), plugin),
-                delay);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Map<Long, BlockData> originalBlocks = SchematicHandler.pasteAndCapture(
+                    schemFile, center.getWorld(),
+                    center.getBlockX(), center.getBlockY(), center.getBlockZ(), plugin
+            );
+            session.getSchematicOriginalBlocks().putAll(originalBlocks);
+            if (config.isDebugEnabled()) {
+                plugin.getLogger().info("[ShrineDebug] Schematic pasted, captured " + originalBlocks.size() + " original blocks");
+            }
+        }, delay);
 
         ShrineTickTask task = new ShrineTickTask(this, config, cleaveHandler, auraHandler, session);
         int taskId = task.runTaskTimer(plugin, 0, 1).getTaskId();
@@ -98,6 +105,10 @@ public class ShrineManager {
         auraHandler.ensureResistance(session, config);
 
         activeSessions.put(caster.getUniqueId(), session);
+
+        session.getBossBar().addPlayer(caster);
+        session.getBossBarViewers().add(caster.getUniqueId());
+
         caster.sendMessage(Component.text("Malevolent Shrine activated!", NamedTextColor.DARK_RED));
         return true;
     }
@@ -114,6 +125,15 @@ public class ShrineManager {
             Bukkit.getScheduler().cancelTask(taskId);
         }
         session.getDismantleTaskIds().clear();
+
+        for (UUID viewerId : session.getBossBarViewers()) {
+            Player viewer = Bukkit.getPlayer(viewerId);
+            if (viewer != null) {
+                session.getBossBar().removePlayer(viewer);
+            }
+        }
+        session.getBossBarViewers().clear();
+        session.getBossBar().removeAll();
 
         Location center = session.getCenter();
         double radius = session.getRadius();

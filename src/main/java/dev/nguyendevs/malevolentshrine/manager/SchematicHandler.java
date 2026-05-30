@@ -1,12 +1,17 @@
 package dev.nguyendevs.malevolentshrine.manager;
 
+import dev.nguyendevs.malevolentshrine.util.BlockPosUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 public class SchematicHandler {
     private static Boolean WORLDEDIT_AVAILABLE;
@@ -24,8 +29,10 @@ public class SchematicHandler {
         return WORLDEDIT_AVAILABLE;
     }
 
-    public static boolean paste(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
-        if (!isAvailable() || !schemFile.exists()) return false;
+    /** Pastes a schematic and returns a map of original blocks that were overwritten, keyed by BlockPosUtil.pack. */
+    public static Map<Long, BlockData> pasteAndCapture(File schemFile, World world, int x, int y, int z, JavaPlugin plugin) {
+        Map<Long, BlockData> result = new HashMap<>();
+        if (!isAvailable() || !schemFile.exists()) return result;
 
         try {
             Class<?> bukkitAdapter = Class.forName("com.sk89q.worldedit.bukkit.BukkitAdapter");
@@ -41,13 +48,38 @@ public class SchematicHandler {
             Object weWorld = bukkitAdapter.getMethod("adapt", World.class).invoke(null, world);
 
             Object format = clipboardFormats.getMethod("findByFile", File.class).invoke(null, schemFile);
-            if (format == null) return false;
+            if (format == null) return result;
 
             try (InputStream fis = new FileInputStream(schemFile)) {
                 Object reader = clipboardFormat.getMethod("getReader", InputStream.class).invoke(format, fis);
                 Class<?> readerClass = Class.forName("com.sk89q.worldedit.extent.clipboard.io.ClipboardReader");
                 Object clipboard = readerClass.getMethod("read").invoke(reader);
                 readerClass.getMethod("close").invoke(reader);
+
+                Object minPoint = clipboardClass.getMethod("getMinimumPoint").invoke(clipboard);
+                Object maxPoint = clipboardClass.getMethod("getMaximumPoint").invoke(clipboard);
+
+                int minClipX = (int) bv3Class.getMethod("getX").invoke(minPoint);
+                int minClipY = (int) bv3Class.getMethod("getY").invoke(minPoint);
+                int minClipZ = (int) bv3Class.getMethod("getZ").invoke(minPoint);
+                int maxClipX = (int) bv3Class.getMethod("getX").invoke(maxPoint);
+                int maxClipY = (int) bv3Class.getMethod("getY").invoke(maxPoint);
+                int maxClipZ = (int) bv3Class.getMethod("getZ").invoke(maxPoint);
+
+                int startX = x + minClipX;
+                int startY = y + minClipY;
+                int startZ = z + minClipZ;
+                int endX = x + maxClipX;
+                int endY = y + maxClipY;
+                int endZ = z + maxClipZ;
+
+                for (int bx = startX; bx <= endX; bx++) {
+                    for (int by = startY; by <= endY; by++) {
+                        for (int bz = startZ; bz <= endZ; bz++) {
+                            result.put(BlockPosUtil.pack(bx, by, bz), world.getBlockAt(bx, by, bz).getBlockData().clone());
+                        }
+                    }
+                }
 
                 Object worldEdit = worldEditClass.getMethod("getInstance").invoke(null);
                 Object editSession = worldEditClass
@@ -79,10 +111,10 @@ public class SchematicHandler {
                     editorClass.getMethod("close").invoke(editSession);
                 }
             }
-            return true;
+            return result;
         } catch (Throwable e) {
             plugin.getLogger().warning("Failed to paste schematic: " + e.getMessage());
-            return false;
+            return result;
         }
     }
 }
