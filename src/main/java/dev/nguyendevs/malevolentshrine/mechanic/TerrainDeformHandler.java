@@ -1,6 +1,7 @@
 package dev.nguyendevs.malevolentshrine.mechanic;
 
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
+import dev.nguyendevs.malevolentshrine.config.SkillConfig;
 import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.manager.WorldGuardHandler;
@@ -25,14 +26,16 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class TerrainDeformHandler {
     private final JavaPlugin plugin;
+    private final SkillConfig skillConfig;
 
     private static final Material[] ROOT_BLOCKS = {
             Material.NETHERRACK, Material.NETHER_WART_BLOCK,
             Material.CRIMSON_NYLIUM, Material.MAGMA_BLOCK
     };
 
-    public TerrainDeformHandler(JavaPlugin plugin) {
+    public TerrainDeformHandler(JavaPlugin plugin, SkillConfig skillConfig) {
         this.plugin = plugin;
+        this.skillConfig = skillConfig;
     }
 
     public void apply(ShrineSession session, ShrineConfig config) {
@@ -71,7 +74,7 @@ public class TerrainDeformHandler {
     }
 
     private List<BlockEdit> collectSurfaceEdits(ShrineSession session, ShrineConfig config,
-                                                 World world, int cx, int cy, int cz, int radius) {
+                                                  World world, int cx, int cy, int cz, int radius) {
         double radiusSq = radius * radius;
         Set<Long> roots = BlockPatternGenerator.generateRoots(cx, cz, radius);
 
@@ -149,11 +152,11 @@ public class TerrainDeformHandler {
     }
 
     private List<BlockEdit> collectDismantleEdits(ShrineSession session, ShrineConfig config,
-                                                   World world, int cx, int cy, int cz, int radius) {
+                                                    World world, int cx, int cy, int cz, int radius) {
         double radiusSq = radius * radius;
 
-        int chunkSize = config.getDismantleChunkSize();
-        int gapSize = config.getDismantleGapSize();
+        int chunkSize = skillConfig.getDomainDismantleChunkSize();
+        int gapSize = skillConfig.getDomainDismantleGapSize();
         int cellSize = chunkSize + gapSize;
 
         int minY = Math.max(world.getMinHeight(), cy - radius);
@@ -278,7 +281,7 @@ public class TerrainDeformHandler {
             surfaceEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
         }
         List<BlockEdit> dismantleEdits = new ArrayList<>();
-        if (config.isRecoverStructure()) {
+        if (skillConfig.isDomainDismantleRecoverStructure()) {
             for (BlockPos bp : session.getOriginalDismantleBlocks()) {
                 dismantleEdits.add(new BlockEdit(bp.getX(), bp.getY(), bp.getZ(), bp.getData()));
             }
