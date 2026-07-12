@@ -1,0 +1,9 @@
+heal-amount: 4.0
+cooldown-seconds: 10
+effects:
+  regeneration:
+    duration: 100
+    amplifier: 1
+  absorption:
+    duration: 200
+    amplifier: 0
