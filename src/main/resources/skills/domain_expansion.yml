@@ -1,0 +1,19 @@
+duration-seconds: 300
+default-radius: 100
+energy:
+  type: XP
+  cost-per-second: 2.0
+effects:
+  weakness-amplifier: 0
+  weakness-duration-ticks: 200
+  reapply-interval-ticks: 200
+  caster-resistance-amplifier: 0
+  caster-regen-amplifier: 0
+  caster-regen-interval-ticks: 100
+darkness:
+  caster-duration: 100
+  others-duration: 200
+dismantle:
+  chunk-size: 5
+  gap-size: 2
+  recover-structure: true
