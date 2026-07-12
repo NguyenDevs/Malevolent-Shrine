@@ -1,6 +1,7 @@
 package dev.nguyendevs.malevolentshrine.manager;
 
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
+import dev.nguyendevs.malevolentshrine.config.SkillConfig;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.mechanic.CleaveSweepHandler;
 import dev.nguyendevs.malevolentshrine.mechanic.EntityAuraHandler;
@@ -17,6 +18,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.RayTraceResult;
 
 import dev.nguyendevs.malevolentshrine.domain.BlockPos;
 import dev.nguyendevs.malevolentshrine.schematic.ShrineSchematic;
@@ -28,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ShrineManager {
     private final JavaPlugin plugin;
     private final ShrineConfig config;
+    private final SkillConfig skillConfig;
     private final CleaveSweepHandler cleaveHandler;
     private final EntityAuraHandler auraHandler;
     private final TerrainDeformHandler terrainHandler;
@@ -36,15 +39,16 @@ public class ShrineManager {
     private final Map<UUID, ShrineSession> activeSessions = new ConcurrentHashMap<>();
     private WorldGuardHandler worldGuardHandler;
 
-    public ShrineManager(JavaPlugin plugin, ShrineConfig config, SkillToggleManager toggleManager,
-                         MessageManager messageManager) {
+    public ShrineManager(JavaPlugin plugin, ShrineConfig config, SkillConfig skillConfig,
+                         SkillToggleManager toggleManager, MessageManager messageManager) {
         this.plugin = plugin;
         this.config = config;
+        this.skillConfig = skillConfig;
         this.toggleManager = toggleManager;
         this.messageManager = messageManager;
-        this.cleaveHandler = new CleaveSweepHandler(plugin);
-        this.auraHandler = new EntityAuraHandler();
-        this.terrainHandler = new TerrainDeformHandler(plugin);
+        this.cleaveHandler = new CleaveSweepHandler(plugin, skillConfig, config);
+        this.auraHandler = new EntityAuraHandler(skillConfig);
+        this.terrainHandler = new TerrainDeformHandler(plugin, skillConfig);
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
             try {
                 this.worldGuardHandler = new WorldGuardHandler();
@@ -88,9 +92,9 @@ public class ShrineManager {
             }
         }
 
-        int durationTicks = config.getDurationSeconds() * 20;
+        int durationTicks = skillConfig.getDomainDurationSeconds() * 20;
         Location center = caster.getLocation();
-        double radius = config.getDefaultRadius();
+        double radius = skillConfig.getDomainDefaultRadius();
 
         if (worldGuardHandler != null && WorldGuardHandler.isLocationProtected(
                 center.getWorld(), center.getBlockX(), center.getBlockY(), center.getBlockZ())) {
@@ -137,9 +141,7 @@ public class ShrineManager {
         teleportLoc.setY(schemY + 0.5);
         caster.teleport(teleportLoc);
 
-        if (toggleManager.isSkillEnabled(caster.getUniqueId(), "dismantle")) {
-            terrainHandler.apply(session, config);
-        }
+        terrainHandler.apply(session, config);
 
         applyDarkness(center, radius, caster);
 
@@ -152,12 +154,13 @@ public class ShrineManager {
             center.getWorld().playSound(center, Sound.BLOCK_BEACON_ACTIVATE, SoundCategory.AMBIENT, 1.5f, 0.3f);
         }
 
-        ShrineTickTask task = new ShrineTickTask(this, config, cleaveHandler, auraHandler, session, toggleManager, messageManager);
+        ShrineTickTask task = new ShrineTickTask(this, config, skillConfig, cleaveHandler, auraHandler,
+                session, messageManager);
         int taskId = task.runTaskTimer(plugin, 0, 1).getTaskId();
         session.setTaskId(taskId);
 
-        auraHandler.applyWeakness(session, config);
-        auraHandler.ensureResistance(session, config);
+        auraHandler.applyWeakness(session);
+        auraHandler.ensureResistance(session);
 
         activeSessions.put(caster.getUniqueId(), session);
 
@@ -223,15 +226,15 @@ public class ShrineManager {
 
     private void executeStandaloneCleave(Player player) {
         Location center = player.getLocation();
-        double radius = config.getDefaultRadius();
+        double radius = skillConfig.getCleaveRadius();
         double radiusSq = radius * radius;
-        double damage = config.getCleaveDamage();
+        double damage = skillConfig.getCleaveDamage();
 
         for (Entity entity : center.getWorld().getNearbyEntities(center, radius, radius, radius)) {
             if (entity instanceof LivingEntity le && !entity.getUniqueId().equals(player.getUniqueId()) && !le.isDead()) {
                 if (entity.getLocation().distanceSquared(center) <= radiusSq) {
                     if (worldGuardHandler != null && WorldGuardHandler.isEntityProtected(entity)) continue;
-                    le.damage(damage, player);
+                    cleaveHandler.applyTrueDamage(le, damage);
                     if (config.isCleaveParticles()) {
                         ParticleUtil.spawnCleaveHit(le.getEyeLocation());
                     }
@@ -247,28 +250,64 @@ public class ShrineManager {
     }
 
     private void executeStandaloneDismantle(Player player) {
-        Location center = player.getLocation();
-        double radius = config.getDefaultRadius();
+        double range = skillConfig.getDismantleRange();
+        double damage = skillConfig.getDismantleDamage();
+        double radius = skillConfig.getDismantleRadius();
 
-        if (config.isDismantleSounds()) {
-            center.getWorld().playSound(center, Sound.ENTITY_ZOMBIE_BREAK_WOODEN_DOOR, SoundCategory.BLOCKS, 0.6f, 0.3f);
+        RayTraceResult result = player.rayTraceEntities((int) range, false);
+        LivingEntity target = null;
+
+        if (result != null && result.getHitEntity() instanceof LivingEntity le
+                && !le.getUniqueId().equals(player.getUniqueId()) && !le.isDead()) {
+            target = le;
         }
 
-        if (config.isDismantleParticles()) {
-            ParticleUtil.spawnActivationDome(center, radius);
+        if (target != null) {
+            if (worldGuardHandler != null && WorldGuardHandler.isEntityProtected(target)) {
+                player.sendMessage(messageManager.getMessage("area-protected"));
+                return;
+            }
+            target.damage(damage, player);
+            if (config.isDismantleParticles()) {
+                ParticleUtil.spawnCleaveHit(target.getEyeLocation());
+            }
+            if (config.isDismantleSounds()) {
+                target.getWorld().playSound(target.getEyeLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP,
+                        SoundCategory.PLAYERS, 1.0f, 0.7f);
+            }
+        } else {
+            Location center = player.getLocation();
+            double radiusSq = radius * radius;
+            for (Entity entity : center.getWorld().getNearbyEntities(center, radius, radius, radius)) {
+                if (entity instanceof LivingEntity le && !entity.getUniqueId().equals(player.getUniqueId()) && !le.isDead()) {
+                    if (entity.getLocation().distanceSquared(center) <= radiusSq) {
+                        if (worldGuardHandler != null && WorldGuardHandler.isEntityProtected(entity)) continue;
+                        le.damage(damage, player);
+                        if (config.isDismantleParticles()) {
+                            ParticleUtil.spawnCleaveHit(le.getEyeLocation());
+                        }
+                    }
+                }
+            }
+            if (config.isDismantleSounds()) {
+                center.getWorld().playSound(center, Sound.ENTITY_PLAYER_ATTACK_SWEEP,
+                        SoundCategory.PLAYERS, 1.0f, 0.7f);
+            }
         }
 
         player.sendMessage(messageManager.getMessage("dismantle-activated"));
     }
 
     private void executeRCT(Player player) {
-        double healAmount = config.getCasterRegenAmplifier() > 0 ? 8.0 : 4.0;
+        double healAmount = skillConfig.getRctHealAmount();
         double maxHealth = player.getMaxHealth();
         double newHealth = Math.min(maxHealth, player.getHealth() + healAmount);
         player.setHealth(newHealth);
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1, false, false, true));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 200, 0, false, false, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION,
+                skillConfig.getRctRegenerationDuration(), skillConfig.getRctRegenerationAmplifier(), false, false, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION,
+                skillConfig.getRctAbsorptionDuration(), skillConfig.getRctAbsorptionAmplifier(), false, false, true));
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WITCH_DRINK, SoundCategory.PLAYERS, 1.0f, 1.0f);
         if (config.isCleaveParticles()) {
@@ -279,11 +318,12 @@ public class ShrineManager {
     }
 
     private void executeDivineFlame(Player player) {
-        Location target = player.getTargetBlockExact(50) != null
-                ? player.getTargetBlockExact(50).getLocation().add(0.5, 1, 0.5)
-                : player.getLocation().add(player.getLocation().getDirection().multiply(30));
+        double range = skillConfig.getDivineFlameRange();
+        Location target = player.getTargetBlockExact((int) range) != null
+                ? player.getTargetBlockExact((int) range).getLocation().add(0.5, 1, 0.5)
+                : player.getLocation().add(player.getLocation().getDirection().multiply(range));
 
-        player.getWorld().createExplosion(target, 4.0f, false, true, player);
+        player.getWorld().createExplosion(target, skillConfig.getDivineFlameExplosionPower(), false, true, player);
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_GHAST_SHOOT, SoundCategory.PLAYERS, 1.0f, 0.5f);
         player.getWorld().playSound(target, Sound.ENTITY_GENERIC_EXPLODE, SoundCategory.BLOCKS, 2.0f, 0.5f);
 
@@ -303,7 +343,9 @@ public class ShrineManager {
     private void applyDarkness(Location center, double radius, Player caster) {
         for (LivingEntity entity : center.getNearbyLivingEntities(radius)) {
             if (entity instanceof Player p) {
-                int duration = p.equals(caster) ? 100 : 200;
+                int duration = p.equals(caster)
+                        ? skillConfig.getDomainDarknessCasterDuration()
+                        : skillConfig.getDomainDarknessOthersDuration();
                 p.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, duration, 0, false, false, true));
             }
         }
