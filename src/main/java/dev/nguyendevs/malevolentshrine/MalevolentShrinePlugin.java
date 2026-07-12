@@ -2,6 +2,7 @@ package dev.nguyendevs.malevolentshrine;
 
 import dev.nguyendevs.malevolentshrine.command.ShrineCommand;
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
+import dev.nguyendevs.malevolentshrine.config.SkillConfig;
 import dev.nguyendevs.malevolentshrine.gui.ShrineGUI;
 import dev.nguyendevs.malevolentshrine.listener.GUIClickListener;
 import dev.nguyendevs.malevolentshrine.listener.SkillActivationListener;
@@ -23,6 +24,7 @@ import java.io.InputStreamReader;
 public final class MalevolentShrinePlugin extends JavaPlugin {
 
     private ShrineConfig shrineConfig;
+    private SkillConfig skillConfig;
     private ShrineManager manager;
     private SkillToggleManager toggleManager;
     private SkillSelectionManager selectionManager;
@@ -46,9 +48,10 @@ public final class MalevolentShrinePlugin extends JavaPlugin {
     public void onEnable() {
         this.messageManager = new MessageManager(this);
         this.shrineConfig = new ShrineConfig(this);
+        this.skillConfig = new SkillConfig(this);
         this.toggleManager = new SkillToggleManager(this);
         this.selectionManager = new SkillSelectionManager(toggleManager, messageManager);
-        this.manager = new ShrineManager(this, shrineConfig, toggleManager, messageManager);
+        this.manager = new ShrineManager(this, shrineConfig, skillConfig, toggleManager, messageManager);
 
         loadGuiConfig();
 
