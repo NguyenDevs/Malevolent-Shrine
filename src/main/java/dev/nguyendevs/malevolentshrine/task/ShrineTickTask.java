@@ -1,11 +1,11 @@
 package dev.nguyendevs.malevolentshrine.task;
 
 import dev.nguyendevs.malevolentshrine.config.ShrineConfig;
+import dev.nguyendevs.malevolentshrine.config.SkillConfig;
 import dev.nguyendevs.malevolentshrine.domain.EnergyType;
 import dev.nguyendevs.malevolentshrine.domain.ShrineSession;
 import dev.nguyendevs.malevolentshrine.manager.MessageManager;
 import dev.nguyendevs.malevolentshrine.manager.ShrineManager;
-import dev.nguyendevs.malevolentshrine.manager.SkillToggleManager;
 import dev.nguyendevs.malevolentshrine.mechanic.CleaveSweepHandler;
 import dev.nguyendevs.malevolentshrine.mechanic.EntityAuraHandler;
 import org.bukkit.Bukkit;
@@ -22,25 +22,25 @@ import java.util.UUID;
 public class ShrineTickTask extends BukkitRunnable {
     private final ShrineManager manager;
     private final ShrineConfig config;
+    private final SkillConfig skillConfig;
     private final CleaveSweepHandler cleaveHandler;
     private final EntityAuraHandler auraHandler;
     private final ShrineSession session;
-    private final SkillToggleManager toggleManager;
     private final MessageManager messageManager;
     private int energyTickCounter;
     private int ambientTickCounter;
     private int ambientLoopSoundCooldown;
     private int ambientMoodSoundCooldown;
 
-    public ShrineTickTask(ShrineManager manager, ShrineConfig config, CleaveSweepHandler cleaveHandler,
-                          EntityAuraHandler auraHandler, ShrineSession session, SkillToggleManager toggleManager,
-                          MessageManager messageManager) {
+    public ShrineTickTask(ShrineManager manager, ShrineConfig config, SkillConfig skillConfig,
+                          CleaveSweepHandler cleaveHandler, EntityAuraHandler auraHandler,
+                          ShrineSession session, MessageManager messageManager) {
         this.manager = manager;
         this.config = config;
+        this.skillConfig = skillConfig;
         this.cleaveHandler = cleaveHandler;
         this.auraHandler = auraHandler;
         this.session = session;
-        this.toggleManager = toggleManager;
         this.messageManager = messageManager;
         this.energyTickCounter = 0;
         this.ambientTickCounter = 0;
@@ -87,20 +87,20 @@ public class ShrineTickTask extends BukkitRunnable {
             }
         }
 
-        auraHandler.ensureResistance(session, config);
+        auraHandler.ensureResistance(session);
 
-        if (session.getElapsedTicks() % config.getReapplyIntervalTicks() == 0) {
-            auraHandler.applyWeakness(session, config);
+        if (session.getElapsedTicks() % skillConfig.getDomainReapplyIntervalTicks() == 0) {
+            auraHandler.applyWeakness(session);
         }
 
-        if (session.getElapsedTicks() % config.getCasterRegenIntervalTicks() == 0) {
-            auraHandler.applyRegen(session, config);
+        if (session.getElapsedTicks() % skillConfig.getDomainCasterRegenIntervalTicks() == 0) {
+            auraHandler.applyRegen(session);
         }
 
         ambientTickCounter++;
         if (ambientTickCounter >= config.getAmbientParticleInterval()) {
             ambientTickCounter = 0;
-            auraHandler.tickAmbient(session, config);
+            auraHandler.tickAmbient(session);
         }
 
         Location center = session.getCenter();
@@ -119,9 +119,7 @@ public class ShrineTickTask extends BukkitRunnable {
             }
         }
 
-        if (toggleManager.isSkillEnabled(session.getPlayerId(), "cleave")) {
-            cleaveHandler.tick(session, config);
-        }
+        cleaveHandler.tick(session);
     }
 
     private void updateBossBarViewers() {
@@ -146,8 +144,8 @@ public class ShrineTickTask extends BukkitRunnable {
     }
 
     private boolean drainEnergy(Player caster) {
-        double cost = config.getEnergyCostPerSecond();
-        EnergyType type = config.getEnergyType();
+        double cost = skillConfig.getDomainEnergyCostPerSecond();
+        EnergyType type = skillConfig.getDomainEnergyType();
 
         switch (type) {
             case XP:
